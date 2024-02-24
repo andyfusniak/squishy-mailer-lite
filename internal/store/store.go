@@ -10,7 +10,7 @@ type Repository interface {
 	ProjectsRepository
 	TransportsRepository
 	GroupsRepository
-	// TemplatesRepository
+	TemplatesRepository
 }
 
 //
@@ -116,6 +116,37 @@ type AddGroup struct {
 	ID         string
 	ProjectID  string
 	GName      string
+	CreatedAt  Datetime
+	ModifiedAt Datetime
+}
+
+//
+// templates
+//
+
+type TemplatesRepository interface {
+	// InsertTemplate inserts a new template into the store
+	InsertTemplate(ctx context.Context, params AddTemplate) (*Template, error)
+}
+
+// Template represents an email template based on the schema.
+type Template struct {
+	ID         string
+	GroupID    string
+	ProjectID  string
+	Txt        string
+	HTML       string
+	CreatedAt  Datetime
+	ModifiedAt Datetime
+}
+
+// AddTemplate is the input parameters for the InsertTemplate method.
+type AddTemplate struct {
+	ID         string
+	GroupID    string
+	ProjectID  string
+	Txt        string
+	HTML       string
 	CreatedAt  Datetime
 	ModifiedAt Datetime
 }

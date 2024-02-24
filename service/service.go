@@ -113,3 +113,39 @@ func groupFromStoreObject(obj *store.Group) *entity.Group {
 		ModifiedAt: entity.ISOTime(obj.ModifiedAt),
 	}
 }
+
+//
+// templates
+//
+
+// CreateTemplate creates a new template. A template is a message template.
+// Template id's are unique within a project. A project can have many templates.
+// A template belongs to a group. A group can have many templates.
+func (s *Service) CreateTemplate(ctx context.Context, params entity.CreateTemplate) (*entity.Template, error) {
+	now := store.Datetime(time.Now().UTC())
+	obj, err := s.store.InsertTemplate(ctx, store.AddTemplate{
+		ID:         params.ID,
+		ProjectID:  params.ProjectID,
+		GroupID:    params.GroupID,
+		HTML:       params.HTML,
+		Txt:        params.Text,
+		CreatedAt:  now,
+		ModifiedAt: now,
+	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "store.InsertTemplate failed")
+	}
+	return templateFromStoreObject(obj), nil
+}
+
+func templateFromStoreObject(obj *store.Template) *entity.Template {
+	return &entity.Template{
+		ID:         obj.ID,
+		ProjectID:  obj.ProjectID,
+		GroupID:    obj.GroupID,
+		HTML:       obj.HTML,
+		Text:       obj.Txt,
+		CreatedAt:  entity.ISOTime(obj.CreatedAt),
+		ModifiedAt: entity.ISOTime(obj.ModifiedAt),
+	}
+}

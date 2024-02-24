@@ -55,7 +55,7 @@ func run() error {
 
 	// if the database file did not exist, create the schema
 	if createDB {
-		if err := createSqliteDB(rw); err != nil {
+		if err := createSqliteDBSchema(rw); err != nil {
 			return fmt.Errorf("failed to create database schema: %w", err)
 		}
 	}
@@ -67,7 +67,8 @@ func run() error {
 	// create a new project to test the system
 	ctx := context.Background()
 	project, err := svc.CreateProject(ctx,
-		"the-cloud-project", "The Cloud Project",
+		"the-cloud-project",
+		"The Cloud Project",
 		"The Cloud Company transactional emails.")
 	if err != nil {
 		return err
@@ -85,6 +86,9 @@ func run() error {
 		EmailFrom:    "info@example.com",
 		EmailReplyTo: "info@example.com",
 	})
+	if err != nil {
+		return err
+	}
 	fmt.Printf("transport: %#v\n", transport)
 
 	group, err := svc.CreateGroup(ctx, "g1", project.ID, "Group One")
@@ -93,10 +97,22 @@ func run() error {
 	}
 	fmt.Printf("group: %#v\n", group)
 
+	template, err := svc.CreateTemplate(ctx, entity.CreateTemplate{
+		ID:        "t1",
+		ProjectID: project.ID,
+		GroupID:   group.ID,
+		HTML:      "<h1>Welcome to the Cloud</h1>",
+		Text:      "Welcome to the Cloud",
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("template: %#v\n", template)
+
 	return nil
 }
 
-func createSqliteDB(db *sql.DB) error {
+func createSqliteDBSchema(db *sql.DB) error {
 	driver, err := driversqlite3.WithInstance(db, &driversqlite3.Config{NoTxWrap: true})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed with instance %+v\n", err)

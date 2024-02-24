@@ -65,3 +65,27 @@ type Group struct {
 	CreatedAt  ISOTime
 	ModifiedAt ISOTime
 }
+
+//
+// templates
+//
+
+// Template represents a single email template.
+type Template struct {
+	ID         string
+	ProjectID  string
+	GroupID    string
+	HTML       string
+	Text       string
+	CreatedAt  ISOTime
+	ModifiedAt ISOTime
+}
+
+// CreateTemplate is the input parameters for the CreateTemplate method.
+type CreateTemplate struct {
+	ID        string
+	ProjectID string
+	GroupID   string
+	HTML      string
+	Text      string
+}

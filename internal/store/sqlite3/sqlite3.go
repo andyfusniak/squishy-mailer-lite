@@ -131,3 +131,41 @@ RETURNING
 	}
 	return &r, nil
 }
+
+//
+// templates
+//
+
+// InsertTemplate inserts a new template into the store.
+func (q *Queries) InsertTemplate(ctx context.Context, params store.AddTemplate) (*store.Template, error) {
+	const query = `
+INSERT INTO templates
+  (id, group_id, project_id, txt, html, created_at, modified_at)
+VALUES
+  (:id, :group_id, :project_id, :txt, :html, :created_at, :modified_at)
+RETURNING
+  id, group_id, project_id, txt, html, created_at, modified_at
+`
+	var r store.Template
+	now := store.Datetime(time.Now().UTC())
+	if err := q.readwrite.QueryRowContext(ctx, query,
+		sql.Named("id", params.ID),
+		sql.Named("group_id", params.GroupID),
+		sql.Named("project_id", params.ProjectID),
+		sql.Named("txt", params.Txt),
+		sql.Named("html", params.HTML),
+		sql.Named("created_at", &now),
+		sql.Named("modified_at", &now),
+	).Scan(
+		&r.ID,
+		&r.GroupID,
+		&r.ProjectID,
+		&r.Txt,
+		&r.HTML,
+		&r.CreatedAt,
+		&r.ModifiedAt,
+	); err != nil {
+		return nil, errors.Wrapf(err, "[sqlite3:templates] query row scan failed query=%q", query)
+	}
+	return &r, nil
+}

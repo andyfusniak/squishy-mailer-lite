@@ -8,7 +8,7 @@ import (
 	gosqlite3 "github.com/mattn/go-sqlite3"
 )
 
-const DriverName = "monolith_sqlite3"
+const DriverName = "squishy_mailer_lite_sqlite3"
 
 func init() {
 	sql.Register(DriverName,

@@ -35,4 +35,19 @@ create table if not exists groups (
   constraint groups_project_id_fkey foreign key (project_id) references projects (id)
 );
 
+create table if not exists templates (
+  id             text not null,
+  group_id       text not null,
+  project_id     text not null,
+  txt            text not null,
+  html           text not null,
+  created_at     text not null,
+  modified_at    text not null,
+  primary key (id, group_id, project_id),
+  constraint templates_code_project_id_ukey unique (group_id, project_id),
+  constraint templates_group_id_fkey foreign key (group_id, project_id) references groups (id, project_id),
+  constraint templates_project_id_fkey foreign key (project_id) references projects (id)
+);
+
+
 commit;
