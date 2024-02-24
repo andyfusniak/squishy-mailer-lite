@@ -25,4 +25,14 @@ create table if not exists transports (
   constraint transports_project_id_fkey foreign key (project_id) references projects (id)
 );
 
+create table if not exists groups (
+  id            text,
+  project_id    text not null,
+  gname         text not null,
+  created_at    text not null,
+  modified_at   text not null,
+  primary key (id, project_id),
+  constraint groups_project_id_fkey foreign key (project_id) references projects (id)
+);
+
 commit;

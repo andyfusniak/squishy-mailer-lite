@@ -52,3 +52,16 @@ type CreateTransport struct {
 	EmailFrom    string
 	EmailReplyTo string
 }
+
+//
+// groups
+//
+
+// Group represents a group of users.
+type Group struct {
+	ID         string
+	ProjectID  string
+	Name       string
+	CreatedAt  ISOTime
+	ModifiedAt ISOTime
+}

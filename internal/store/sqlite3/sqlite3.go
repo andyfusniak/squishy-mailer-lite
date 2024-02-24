@@ -97,3 +97,37 @@ RETURNING
 	}
 	return &r, nil
 }
+
+//
+// groups
+//
+
+// InsertGroup inserts a new group into the store.
+func (q *Queries) InsertGroup(ctx context.Context, params store.AddGroup) (*store.Group, error) {
+	const query = `
+INSERT INTO groups
+  (id, project_id, gname, created_at, modified_at)
+VALUES
+  (:id, :project_id, :gname, :created_at, :modified_at)
+RETURNING
+  id, project_id, gname, created_at, modified_at
+	`
+	var r store.Group
+	now := store.Datetime(time.Now().UTC())
+	if err := q.readwrite.QueryRowContext(ctx, query,
+		sql.Named("id", params.ID),
+		sql.Named("project_id", params.ProjectID),
+		sql.Named("gname", params.GName),
+		sql.Named("created_at", &now),
+		sql.Named("modified_at", &now),
+	).Scan(
+		&r.ID,
+		&r.ProjectID,
+		&r.GName,
+		&r.CreatedAt,
+		&r.ModifiedAt,
+	); err != nil {
+		return nil, errors.Wrapf(err, "[sqlite3:groups] query row scan failed query=%q", query)
+	}
+	return &r, nil
+}

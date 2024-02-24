@@ -24,3 +24,5 @@ bin/
 
 # sqlite3 files
 *.db
+*.*-shm
+*.*-wal

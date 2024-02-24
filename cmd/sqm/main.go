@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -57,7 +56,7 @@ func run() error {
 	// if the database file did not exist, create the schema
 	if createDB {
 		if err := createSqliteDB(rw); err != nil {
-			return errors.New("failed to create database schema")
+			return fmt.Errorf("failed to create database schema: %w", err)
 		}
 	}
 
@@ -75,7 +74,7 @@ func run() error {
 	}
 	fmt.Printf("project: %+v\n", project)
 
-	trsp, err := svc.CreateTransport(ctx, entity.CreateTransport{
+	transport, err := svc.CreateTransport(ctx, entity.CreateTransport{
 		ID:           "the-cloud-transport",
 		ProjectID:    project.ID,
 		Name:         "The Cloud SMTP",
@@ -86,7 +85,13 @@ func run() error {
 		EmailFrom:    "info@example.com",
 		EmailReplyTo: "info@example.com",
 	})
-	fmt.Printf("transport: %#v\n", trsp)
+	fmt.Printf("transport: %#v\n", transport)
+
+	group, err := svc.CreateGroup(ctx, "g1", project.ID, "Group One")
+	if err != nil {
+		return err
+	}
+	fmt.Printf("group: %#v\n", group)
 
 	return nil
 }

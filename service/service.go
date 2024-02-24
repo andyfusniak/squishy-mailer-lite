@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/andyfusniak/squishy-mailer-lite/entity"
 	"github.com/andyfusniak/squishy-mailer-lite/internal/store"
@@ -79,5 +80,36 @@ func transportFromStoreObject(obj *store.Transport) *entity.Transport {
 		EmailReplyTo: obj.EmailReplyTo,
 		CreatedAt:    entity.ISOTime(obj.CreatedAt),
 		ModifiedAt:   entity.ISOTime(obj.ModifiedAt),
+	}
+}
+
+//
+// groups
+//
+
+// CreateGroup creates a new group. A group is a collection of templates.
+// Group id's are unique within a project. A project can have many groups.
+func (s *Service) CreateGroup(ctx context.Context, id, projectID, name string) (*entity.Group, error) {
+	now := store.Datetime(time.Now().UTC())
+	obj, err := s.store.InsertGroup(ctx, store.AddGroup{
+		ID:         id,
+		ProjectID:  projectID,
+		GName:      name,
+		CreatedAt:  now,
+		ModifiedAt: now,
+	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "store.InsertGroup failed")
+	}
+	return groupFromStoreObject(obj), nil
+}
+
+func groupFromStoreObject(obj *store.Group) *entity.Group {
+	return &entity.Group{
+		ID:         obj.ID,
+		ProjectID:  obj.ProjectID,
+		Name:       obj.GName,
+		CreatedAt:  entity.ISOTime(obj.CreatedAt),
+		ModifiedAt: entity.ISOTime(obj.ModifiedAt),
 	}
 }

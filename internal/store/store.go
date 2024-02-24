@@ -9,7 +9,7 @@ import (
 type Repository interface {
 	ProjectsRepository
 	TransportsRepository
-	// GroupsRepository
+	GroupsRepository
 	// TemplatesRepository
 }
 
@@ -91,4 +91,31 @@ type AddTransport struct {
 	EncryptedPassword string
 	EmailFrom         string
 	EmailReplyTo      string
+}
+
+//
+// groups
+//
+
+type GroupsRepository interface {
+	// InsertGroup inserts a new group into the store
+	InsertGroup(ctx context.Context, params AddGroup) (*Group, error)
+}
+
+// Group represents a group of templates.
+type Group struct {
+	ID         string
+	ProjectID  string
+	GName      string
+	CreatedAt  Datetime
+	ModifiedAt Datetime
+}
+
+// AddGroup logically groups together a set of email templates.
+type AddGroup struct {
+	ID         string
+	ProjectID  string
+	GName      string
+	CreatedAt  Datetime
+	ModifiedAt Datetime
 }
