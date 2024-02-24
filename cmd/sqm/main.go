@@ -15,6 +15,7 @@ import (
 
 	"github.com/golang-migrate/migrate/v4/source/httpfs"
 
+	"github.com/andyfusniak/squishy-mailer-lite/entity"
 	"github.com/andyfusniak/squishy-mailer-lite/internal/store/sqlite3"
 	"github.com/andyfusniak/squishy-mailer-lite/internal/store/sqlite3/schema"
 	"github.com/andyfusniak/squishy-mailer-lite/service"
@@ -73,6 +74,19 @@ func run() error {
 		return err
 	}
 	fmt.Printf("project: %+v\n", project)
+
+	trsp, err := svc.CreateTransport(ctx, entity.CreateTransport{
+		ID:           "the-cloud-transport",
+		ProjectID:    project.ID,
+		Name:         "The Cloud SMTP",
+		Host:         "smtp.sendgrid.net",
+		Port:         587,
+		Username:     "example",
+		Password:     "secret",
+		EmailFrom:    "info@example.com",
+		EmailReplyTo: "info@example.com",
+	})
+	fmt.Printf("transport: %#v\n", trsp)
 
 	return nil
 }

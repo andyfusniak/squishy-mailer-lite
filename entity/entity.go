@@ -21,3 +21,34 @@ type Project struct {
 	Description string
 	CreatedAt   ISOTime
 }
+
+//
+// transports
+//
+
+// Transport represents an individual transport based on
+type Transport struct {
+	ID           string
+	ProjectID    string
+	Name         string
+	Host         string
+	Port         int
+	Username     string
+	EmailFrom    string
+	EmailReplyTo string
+	CreatedAt    ISOTime
+	ModifiedAt   ISOTime
+}
+
+// CreateTransport is the input parameters for the CreateTransport method.
+type CreateTransport struct {
+	ID           string
+	ProjectID    string
+	Name         string
+	Host         string
+	Port         int
+	Username     string
+	Password     string
+	EmailFrom    string
+	EmailReplyTo string
+}

@@ -8,10 +8,14 @@ import (
 
 type Repository interface {
 	ProjectsRepository
-	// TransportsRepository
+	TransportsRepository
 	// GroupsRepository
 	// TemplatesRepository
 }
+
+//
+// projects
+//
 
 // ProjectsRepository is the interface for the projects repository.
 type ProjectsRepository interface {
@@ -50,4 +54,41 @@ func (t *Datetime) Scan(v any) error {
 
 func (t *Datetime) Value() (driver.Value, error) {
 	return time.Time(*t).UTC().Format(RFC3339Micro), nil
+}
+
+//
+// transports
+//
+
+type TransportsRepository interface {
+	// InsertTransport inserts a new transport into the store
+	InsertTransport(ctx context.Context, params AddTransport) (*Transport, error)
+}
+
+// Transport represents an SMTP transport for a project.
+type Transport struct {
+	ID                string
+	ProjectID         string
+	TRName            string
+	Host              string
+	Port              int
+	Username          string
+	EncryptedPassword string
+	EmailFrom         string
+	EmailReplyTo      string
+	CreatedAt         Datetime
+	ModifiedAt        Datetime
+}
+
+// AddTransport is the input parameters for the InsertTransport method.
+type AddTransport struct {
+	ID                string
+	ProjectID         string
+	TRName            string
+	Host              string
+	Port              int
+	Username          string
+	EncryptedPassword string
+	EmailFrom         string
+	EmailReplyTo      string
 }
