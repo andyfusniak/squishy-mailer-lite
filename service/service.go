@@ -5,17 +5,21 @@ import (
 	"time"
 
 	"github.com/andyfusniak/squishy-mailer-lite/entity"
+	"github.com/andyfusniak/squishy-mailer-lite/internal/email"
 	"github.com/andyfusniak/squishy-mailer-lite/internal/store"
 	"github.com/pkg/errors"
 )
 
 type Service struct {
-	store store.Repository
+	store     store.Repository
+	transport email.Sender
 }
 
-func NewService(store store.Repository) *Service {
+// NewEmailService creates a new service with the specified store and sender.
+func NewEmailService(store store.Repository, transport email.Sender) *Service {
 	return &Service{
-		store: store,
+		store:     store,
+		transport: transport,
 	}
 }
 
@@ -148,4 +152,14 @@ func templateFromStoreObject(obj *store.Template) *entity.Template {
 		CreatedAt:  entity.ISOTime(obj.CreatedAt),
 		ModifiedAt: entity.ISOTime(obj.ModifiedAt),
 	}
+}
+
+// SendEmail sends an email using the specified template.
+func (s *Service) SendEmail(ctx context.Context, subject, templateID string) error {
+	return s.transport.SendEmail(email.EmailParams{
+		Subject: subject,
+		Text:    "Hello, World!",
+		HTML:    "<h1>Hello, World!</h1>",
+		To:      []string{"andy@andyfusniak.com"},
+	})
 }

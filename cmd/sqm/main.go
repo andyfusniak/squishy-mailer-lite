@@ -15,6 +15,8 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/httpfs"
 
 	"github.com/andyfusniak/squishy-mailer-lite/entity"
+
+	"github.com/andyfusniak/squishy-mailer-lite/internal/email"
 	"github.com/andyfusniak/squishy-mailer-lite/internal/store/sqlite3"
 	"github.com/andyfusniak/squishy-mailer-lite/internal/store/sqlite3/schema"
 	"github.com/andyfusniak/squishy-mailer-lite/service"
@@ -62,7 +64,19 @@ func run() error {
 
 	// create the store and service
 	st := sqlite3.NewStore(rw, rw)
-	svc := service.NewService(st)
+
+	awsTransport := email.NewAWSSMTPTransport("transport1", email.AWSConfig{
+		Host:     "email-smtp.us-east-1.amazonaws.com",
+		Port:     "587",
+		Username: "<username>",
+		Password: "<password>",
+		Name:     "Squishy Mailer Lite",
+		From:     "support@ravenmailer.com",
+	})
+
+	svc := service.NewEmailService(st, awsTransport)
+
+	svc.SendEmail(context.Background(), "My test subject line", "t1")
 
 	// create a new project to test the system
 	ctx := context.Background()
@@ -108,6 +122,11 @@ func run() error {
 		return err
 	}
 	fmt.Printf("template: %#v\n", template)
+
+	// send a test email
+	if err := svc.SendEmail(ctx, "My test subject line", template.ID); err != nil {
+		return err
+	}
 
 	return nil
 }
