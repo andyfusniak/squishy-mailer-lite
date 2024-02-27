@@ -90,14 +90,23 @@ type CreateTemplate struct {
 	Text      string
 }
 
+// CreateTemplateFromFiles is the input parameters for the CreateTemplateFromFiles method.
+type CreateTemplateFromFiles struct {
+	ID            string
+	GroupID       string
+	ProjectID     string
+	HTMLFilenames []string
+	TxtFilenames  []string
+}
+
 //
 // send email
 //
 
 // SendEmailParams is the input parameters for the SendEmail method.
 type SendEmailParams struct {
-	ProjectID      string
 	TemplateID     string
+	ProjectID      string
 	To             []string
 	Subject        string
 	TemplateParams map[string]string

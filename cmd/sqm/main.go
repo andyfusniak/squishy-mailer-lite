@@ -114,12 +114,29 @@ func run() error {
 	}
 	fmt.Printf("group: %#v\n", group)
 
-	template, err := svc.CreateTemplate(ctx, entity.CreateTemplate{
+	// template, err := svc.CreateTemplate(ctx, entity.CreateTemplate{
+	// 	ID:        "t1",
+	// 	ProjectID: project.ID,
+	// 	GroupID:   group.ID,
+	// 	HTML:      "<h1>Welcome {{.firstname}}, to the Cloud</h1>",
+	// 	Text:      "Welcome {{.firstname}}, to the Cloud",
+	// })
+	// if err != nil {
+	// 	return err
+	// }
+
+	template, err := svc.CreateTemplateFromFiles(ctx, entity.CreateTemplateFromFiles{
 		ID:        "t1",
 		ProjectID: project.ID,
 		GroupID:   group.ID,
-		HTML:      "<h1>Welcome {{.firstname}}, to the Cloud</h1>",
-		Text:      "Welcome {{.firstname}}, to the Cloud",
+		HTMLFilenames: []string{
+			"./service/testdata/email/templates/layout.html",
+			"./service/testdata/email/templates/welcome.html",
+		},
+		TxtFilenames: []string{
+			"./service/testdata/email/templates/layout.txt",
+			"./service/testdata/email/templates/welcome.txt",
+		},
 	})
 	if err != nil {
 		return err
@@ -128,8 +145,8 @@ func run() error {
 
 	// send a test email
 	if err := svc.SendEmail(ctx, entity.SendEmailParams{
-		ProjectID:  project.ID,
 		TemplateID: template.ID,
+		ProjectID:  project.ID,
 		To:         []string{"andy@andyfusniak.com"},
 		Subject:    "My test subject line",
 		TemplateParams: map[string]string{

@@ -1,0 +1,7 @@
+{{- define "layout" }}
+
+Layout text template
+
+{{ template "content" . }}
+
+{{- end }}

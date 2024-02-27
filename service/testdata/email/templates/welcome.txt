@@ -1,0 +1,3 @@
+{{- define "content" }}
+Welcome content from the text template
+{{- end }}
