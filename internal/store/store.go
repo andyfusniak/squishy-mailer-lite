@@ -8,7 +8,7 @@ import (
 
 type Repository interface {
 	ProjectsRepository
-	TransportsRepository
+	SMTPTransportsRepository
 	GroupsRepository
 	TemplatesRepository
 }
@@ -25,17 +25,18 @@ type ProjectsRepository interface {
 
 // Project represents an individual project.
 type Project struct {
-	ID          string
-	PName       string
+	ProjectID   string
+	ProjectName string
 	Description string
 	CreatedAt   Datetime
 }
 
 // AddProject is the input parameters for the InsertProject method.
 type AddProject struct {
-	ID          string
-	PName       string
+	ProjectID   string
+	ProjectName string
 	Description string
+	CreatedAt   Datetime
 }
 
 const RFC3339Micro = "2006-01-02T15:04:05.000000Z07:00" // .000000Z = keep trailing zeros
@@ -57,19 +58,19 @@ func (t *Datetime) Value() (driver.Value, error) {
 }
 
 //
-// transports
+// smtp transports
 //
 
-type TransportsRepository interface {
-	// InsertTransport inserts a new transport into the store
-	InsertTransport(ctx context.Context, params AddTransport) (*Transport, error)
+type SMTPTransportsRepository interface {
+	// InsertSMTPTransport inserts a new SMTP transport into the store.
+	InsertSMTPTransport(ctx context.Context, params AddSMTPTransport) (*SMTPTransport, error)
 }
 
-// Transport represents an SMTP transport for a project.
-type Transport struct {
-	ID                string
+// SMTPTransport represents an SMTP transport for a project.
+type SMTPTransport struct {
+	SMTPTransportID   string
 	ProjectID         string
-	TRName            string
+	TransportName     string
 	Host              string
 	Port              int
 	Username          string
@@ -80,17 +81,19 @@ type Transport struct {
 	ModifiedAt        Datetime
 }
 
-// AddTransport is the input parameters for the InsertTransport method.
-type AddTransport struct {
-	ID                string
+// AddSMTPTransport is the input parameters for the InsertSMTPTransport method.
+type AddSMTPTransport struct {
+	SMTPTransportID   string
 	ProjectID         string
-	TRName            string
+	TransportName     string
 	Host              string
 	Port              int
 	Username          string
 	EncryptedPassword string
 	EmailFrom         string
 	EmailReplyTo      string
+	CreatedAt         Datetime
+	ModifiedAt        Datetime
 }
 
 //
@@ -104,18 +107,18 @@ type GroupsRepository interface {
 
 // Group represents a group of templates.
 type Group struct {
-	ID         string
+	GroupID    string
 	ProjectID  string
-	GName      string
+	GroupName  string
 	CreatedAt  Datetime
 	ModifiedAt Datetime
 }
 
 // AddGroup logically groups together a set of email templates.
 type AddGroup struct {
-	ID         string
+	GroupID    string
 	ProjectID  string
-	GName      string
+	GroupName  string
 	CreatedAt  Datetime
 	ModifiedAt Datetime
 }
@@ -131,7 +134,7 @@ type TemplatesRepository interface {
 
 // Template represents an email template based on the schema.
 type Template struct {
-	ID         string
+	TemplateID string
 	GroupID    string
 	ProjectID  string
 	Txt        string
@@ -142,7 +145,7 @@ type Template struct {
 
 // AddTemplate is the input parameters for the InsertTemplate method.
 type AddTemplate struct {
-	ID         string
+	TemplateID string
 	GroupID    string
 	ProjectID  string
 	Txt        string

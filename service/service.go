@@ -30,8 +30,8 @@ func NewEmailService(store store.Repository, transport email.Sender) *Service {
 // CreateProject creates a new project.
 func (s *Service) CreateProject(ctx context.Context, id, name, description string) (*entity.Project, error) {
 	obj, err := s.store.InsertProject(ctx, store.AddProject{
-		ID:          id,
-		PName:       name,
+		ProjectID:   id,
+		ProjectName: name,
 		Description: description,
 	})
 	if err != nil {
@@ -42,8 +42,8 @@ func (s *Service) CreateProject(ctx context.Context, id, name, description strin
 
 func projectFromStoreObject(obj *store.Project) *entity.Project {
 	return &entity.Project{
-		ID:          obj.ID,
-		Name:        obj.PName,
+		ID:          obj.ProjectID,
+		Name:        obj.ProjectName,
 		Description: obj.Description,
 		CreatedAt:   entity.ISOTime(obj.CreatedAt),
 	}
@@ -53,12 +53,12 @@ func projectFromStoreObject(obj *store.Project) *entity.Project {
 // transports
 //
 
-// CreateTransport creates a new transport.
-func (s *Service) CreateTransport(ctx context.Context, params entity.CreateTransport) (*entity.Transport, error) {
-	obj, err := s.store.InsertTransport(ctx, store.AddTransport{
-		ID:                params.ID,
+// CreateSMTPTransport creates a new SMTP transport.
+func (s *Service) CreateSMTPTransport(ctx context.Context, params entity.CreateSMTPTransport) (*entity.SMTPTransport, error) {
+	obj, err := s.store.InsertSMTPTransport(ctx, store.AddSMTPTransport{
+		SMTPTransportID:   params.ID,
 		ProjectID:         params.ProjectID,
-		TRName:            params.Name,
+		TransportName:     params.Name,
 		Host:              params.Host,
 		Port:              params.Port,
 		EncryptedPassword: params.Password, // TODO encrypt the password
@@ -67,16 +67,16 @@ func (s *Service) CreateTransport(ctx context.Context, params entity.CreateTrans
 		EmailReplyTo:      params.EmailReplyTo,
 	})
 	if err != nil {
-		return nil, errors.Wrapf(err, "store.InsertTransport failed")
+		return nil, errors.Wrapf(err, "store.InsertSMTPTransport failed")
 	}
-	return transportFromStoreObject(obj), nil
+	return smtpTransportFromStoreObject(obj), nil
 }
 
-func transportFromStoreObject(obj *store.Transport) *entity.Transport {
-	return &entity.Transport{
-		ID:           obj.ID,
+func smtpTransportFromStoreObject(obj *store.SMTPTransport) *entity.SMTPTransport {
+	return &entity.SMTPTransport{
+		ID:           obj.SMTPTransportID,
 		ProjectID:    obj.ProjectID,
-		Name:         obj.TRName,
+		Name:         obj.TransportName,
 		Host:         obj.Host,
 		Port:         obj.Port,
 		Username:     obj.Username,
@@ -96,9 +96,9 @@ func transportFromStoreObject(obj *store.Transport) *entity.Transport {
 func (s *Service) CreateGroup(ctx context.Context, id, projectID, name string) (*entity.Group, error) {
 	now := store.Datetime(time.Now().UTC())
 	obj, err := s.store.InsertGroup(ctx, store.AddGroup{
-		ID:         id,
+		GroupID:    id,
 		ProjectID:  projectID,
-		GName:      name,
+		GroupName:  name,
 		CreatedAt:  now,
 		ModifiedAt: now,
 	})
@@ -110,9 +110,9 @@ func (s *Service) CreateGroup(ctx context.Context, id, projectID, name string) (
 
 func groupFromStoreObject(obj *store.Group) *entity.Group {
 	return &entity.Group{
-		ID:         obj.ID,
+		ID:         obj.GroupID,
 		ProjectID:  obj.ProjectID,
-		Name:       obj.GName,
+		Name:       obj.GroupName,
 		CreatedAt:  entity.ISOTime(obj.CreatedAt),
 		ModifiedAt: entity.ISOTime(obj.ModifiedAt),
 	}
@@ -128,7 +128,7 @@ func groupFromStoreObject(obj *store.Group) *entity.Group {
 func (s *Service) CreateTemplate(ctx context.Context, params entity.CreateTemplate) (*entity.Template, error) {
 	now := store.Datetime(time.Now().UTC())
 	obj, err := s.store.InsertTemplate(ctx, store.AddTemplate{
-		ID:         params.ID,
+		TemplateID: params.ID,
 		ProjectID:  params.ProjectID,
 		GroupID:    params.GroupID,
 		HTML:       params.HTML,
@@ -144,7 +144,7 @@ func (s *Service) CreateTemplate(ctx context.Context, params entity.CreateTempla
 
 func templateFromStoreObject(obj *store.Template) *entity.Template {
 	return &entity.Template{
-		ID:         obj.ID,
+		ID:         obj.TemplateID,
 		ProjectID:  obj.ProjectID,
 		GroupID:    obj.GroupID,
 		HTML:       obj.HTML,

@@ -23,11 +23,11 @@ type Project struct {
 }
 
 //
-// transports
+// SMTP transports
 //
 
-// Transport represents an individual transport based on
-type Transport struct {
+// SMTPTransport represents an individual transport based on
+type SMTPTransport struct {
 	ID           string
 	ProjectID    string
 	Name         string
@@ -40,8 +40,8 @@ type Transport struct {
 	ModifiedAt   ISOTime
 }
 
-// CreateTransport is the input parameters for the CreateTransport method.
-type CreateTransport struct {
+// CreateSMTPTransport is the input parameters for the CreateSMTPTransport method.
+type CreateSMTPTransport struct {
 	ID           string
 	ProjectID    string
 	Name         string
@@ -73,8 +73,8 @@ type Group struct {
 // Template represents a single email template.
 type Template struct {
 	ID         string
-	ProjectID  string
 	GroupID    string
+	ProjectID  string
 	HTML       string
 	Text       string
 	CreatedAt  ISOTime
@@ -84,8 +84,8 @@ type Template struct {
 // CreateTemplate is the input parameters for the CreateTemplate method.
 type CreateTemplate struct {
 	ID        string
-	ProjectID string
 	GroupID   string
+	ProjectID string
 	HTML      string
 	Text      string
 }

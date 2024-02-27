@@ -2,24 +2,20 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"net/http"
 	"os"
 	"time"
-
-	"github.com/golang-migrate/migrate/v4"
-
-	driversqlite3 "github.com/golang-migrate/migrate/v4/database/sqlite3"
-
-	"github.com/golang-migrate/migrate/v4/source/httpfs"
 
 	"github.com/andyfusniak/squishy-mailer-lite/entity"
 
 	"github.com/andyfusniak/squishy-mailer-lite/internal/email"
 	"github.com/andyfusniak/squishy-mailer-lite/internal/store/sqlite3"
-	"github.com/andyfusniak/squishy-mailer-lite/internal/store/sqlite3/schema"
 	"github.com/andyfusniak/squishy-mailer-lite/service"
+)
+
+const (
+	defaultMaxOpenConns int = 120
+	defaultMaxIdleConns int = 20
 )
 
 func main() {
@@ -43,7 +39,7 @@ func run() error {
 		createDB = true
 	}
 
-	// setup the database connection
+	// database connection
 	// one read-only with high concurrency
 	// one read-write for non-concurrent queries
 	rw, err := sqlite3.OpenDB(dbfile)
@@ -55,9 +51,18 @@ func run() error {
 	rw.SetMaxIdleConns(1)
 	rw.SetConnMaxIdleTime(5 * time.Minute)
 
+	ro, err := sqlite3.OpenDB(dbfile)
+	if err != nil {
+		return err
+	}
+	defer ro.Close()
+	ro.SetMaxOpenConns(defaultMaxOpenConns)
+	ro.SetMaxIdleConns(defaultMaxIdleConns)
+	ro.SetConnMaxIdleTime(5 * time.Minute)
+
 	// if the database file did not exist, create the schema
 	if createDB {
-		if err := createSqliteDBSchema(rw); err != nil {
+		if err := sqlite3.CreateSqliteDBSchema(rw); err != nil {
 			return fmt.Errorf("failed to create database schema: %w", err)
 		}
 	}
@@ -89,7 +94,7 @@ func run() error {
 	}
 	fmt.Printf("project: %+v\n", project)
 
-	transport, err := svc.CreateTransport(ctx, entity.CreateTransport{
+	smtp, err := svc.CreateSMTPTransport(ctx, entity.CreateSMTPTransport{
 		ID:           "the-cloud-transport",
 		ProjectID:    project.ID,
 		Name:         "The Cloud SMTP",
@@ -103,7 +108,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("transport: %#v\n", transport)
+	fmt.Printf("transport: %#v\n", smtp)
 
 	group, err := svc.CreateGroup(ctx, "g1", project.ID, "Group One")
 	if err != nil {
@@ -126,30 +131,6 @@ func run() error {
 	// send a test email
 	if err := svc.SendEmail(ctx, "My test subject line", template.ID); err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func createSqliteDBSchema(db *sql.DB) error {
-	driver, err := driversqlite3.WithInstance(db, &driversqlite3.Config{NoTxWrap: true})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed with instance %+v\n", err)
-		os.Exit(1)
-	}
-
-	source, err := httpfs.New(http.FS(schema.Migrations), "migrations")
-	if err != nil {
-		return err
-	}
-
-	mg, err := migrate.NewWithInstance("https", source, "sqlite3", driver)
-	if err != nil {
-		return fmt.Errorf("failed to get new migrate instance: %w", err)
-	}
-
-	if err := mg.Up(); err != nil {
-		return fmt.Errorf("migrate up failed: %w", err)
 	}
 
 	return nil
