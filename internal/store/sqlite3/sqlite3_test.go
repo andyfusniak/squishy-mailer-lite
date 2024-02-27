@@ -117,6 +117,31 @@ func TestInsertSMTPTransport(t *testing.T) {
 	assert.WithinDuration(t, time.Now(), time.Time(obj.ModifiedAt), 1*time.Millisecond)
 }
 
+func TestInsertGroupIntoNonExistingProject(t *testing.T) {
+	rw, err := setupInMemoryDB()
+	if err != nil {
+		t.Fatalf("rw, ro, err := openDBs() failed: %v", err)
+	}
+	defer rw.Close()
+
+	// create a new store
+	st := sqlite3.NewStore(rw, rw)
+
+	ctx := context.Background()
+	group, err := st.InsertGroup(ctx, store.AddGroup{
+		GroupID:   "gz",
+		ProjectID: "non-existing-project",
+		GroupName: "Group Z",
+	})
+	if err == nil {
+		t.Fatalf("expected err to be non-nil")
+	}
+	if group != nil {
+		t.Fatalf("expected group to be nil")
+	}
+	assert.Equal(t, store.ErrProjectNotFound, err)
+}
+
 func TestInsertGroup(t *testing.T) {
 	rw, err := setupInMemoryDB()
 	if err != nil {
@@ -150,6 +175,115 @@ func TestInsertGroup(t *testing.T) {
 	assert.Equal(t, "Test Group One", obj.GroupName)
 	assert.WithinDuration(t, time.Now(), time.Time(obj.CreatedAt), 1*time.Millisecond)
 	assert.WithinDuration(t, time.Now(), time.Time(obj.ModifiedAt), 1*time.Millisecond)
+}
+
+func TestGetGroup(t *testing.T) {
+	rw, err := setupInMemoryDB()
+	if err != nil {
+		t.Fatalf("rw, ro, err := openDBs() failed: %v", err)
+	}
+	defer rw.Close()
+
+	// create a new store
+	st := sqlite3.NewStore(rw, rw)
+
+	ctx := context.Background()
+	p1, err := st.InsertProject(ctx, store.AddProject{
+		ProjectID:   "p1",
+		ProjectName: "Project P One",
+		Description: "Project P One Description",
+	})
+	if err != nil {
+		t.Fatalf("expected err to be non-nil: %+v", err)
+	}
+
+	g1, err := st.InsertGroup(ctx, store.AddGroup{
+		GroupID:   "g1",
+		ProjectID: p1.ProjectID,
+		GroupName: "Group One",
+	})
+	if err != nil {
+		t.Fatalf("expected err to be non-nil: %+v", err)
+	}
+
+	obj, err := st.GetGroup(ctx, p1.ProjectID, g1.GroupID)
+	if err != nil {
+		t.Fatalf("expected err to be non-nil: %+v", err)
+	}
+	assert.Equal(t, "g1", obj.GroupID)
+	assert.Equal(t, p1.ProjectID, obj.ProjectID)
+	assert.Equal(t, "Group One", obj.GroupName)
+	assert.Equal(t, time.Time(g1.CreatedAt), time.Time(obj.CreatedAt))
+	assert.Equal(t, time.Time(g1.ModifiedAt), time.Time(obj.ModifiedAt))
+}
+
+func TestNonExistentGroupInProject(t *testing.T) {
+	rw, err := setupInMemoryDB()
+	if err != nil {
+		t.Fatalf("rw, ro, err := openDBs() failed: %v", err)
+	}
+	defer rw.Close()
+
+	// create a new store
+	st := sqlite3.NewStore(rw, rw)
+
+	// create project p1
+	ctx := context.Background()
+	p1, err := st.InsertProject(ctx, store.AddProject{
+		ProjectID:   "p1",
+		ProjectName: "Project P One",
+		Description: "Project P One Description",
+	})
+	if err != nil {
+		t.Fatalf("expected err to be non-nil: %+v", err)
+	}
+
+	// look for non-existent group in project p1
+	g, err := st.GetGroup(ctx, p1.ProjectID, "non-existent-group")
+	if err == nil {
+		t.Fatalf("expected err to be non-nil")
+	}
+	assert.Nil(t, g, "expected g to be nil")
+	assert.Equal(t, store.ErrGroupNotFound, err)
+}
+
+func TestNonExistentProjectForGroup(t *testing.T) {
+	rw, err := setupInMemoryDB()
+	if err != nil {
+		t.Fatalf("rw, ro, err := openDBs() failed: %v", err)
+	}
+	defer rw.Close()
+
+	// create a new store
+	st := sqlite3.NewStore(rw, rw)
+
+	// create project p1
+	ctx := context.Background()
+	p1, err := st.InsertProject(ctx, store.AddProject{
+		ProjectID:   "p1",
+		ProjectName: "Project P One",
+		Description: "Project P One Description",
+	})
+	if err != nil {
+		t.Fatalf("expected err to be non-nil: %+v", err)
+	}
+
+	// create group g1
+	g1, err := st.InsertGroup(ctx, store.AddGroup{
+		GroupID:   "g1",
+		ProjectID: p1.ProjectID,
+		GroupName: "Group One",
+	})
+	if err != nil {
+		t.Fatalf("expected err to be non-nil: %+v", err)
+	}
+
+	// look for group g1 in non-existent project
+	_, err = st.GetGroup(ctx, "non-existent-project", g1.GroupID)
+	if err == nil {
+		t.Fatalf("expected err to be non-nil")
+	}
+	assert.Equal(t, store.ErrProjectNotFound, err)
 }
 
 func TestInsertTemplate(t *testing.T) {
@@ -198,4 +332,73 @@ func TestInsertTemplate(t *testing.T) {
 	assert.Equal(t, "<h1>Test HTML</h1>", obj.HTML)
 	assert.WithinDuration(t, time.Now(), time.Time(obj.CreatedAt), 1*time.Millisecond)
 	assert.WithinDuration(t, time.Now(), time.Time(obj.ModifiedAt), 1*time.Millisecond)
+}
+
+func TestGetTemplate(t *testing.T) {
+	rw, err := setupInMemoryDB()
+	if err != nil {
+		t.Fatalf("rw, ro, err := openDBs() failed: %v", err)
+	}
+	defer rw.Close()
+
+	// create a new store
+	st := sqlite3.NewStore(rw, rw)
+
+	// create project p1
+	ctx := context.Background()
+	p1, err := st.InsertProject(ctx, store.AddProject{
+		ProjectID:   "p1",
+		ProjectName: "P One",
+		Description: "P One project description",
+	})
+	if err != nil {
+		t.Fatalf("expected err to be non-nil: %+v", err)
+	}
+
+	g1, err := st.InsertGroup(ctx, store.AddGroup{
+		GroupID:   "g1",
+		ProjectID: p1.ProjectID,
+		GroupName: "Group One",
+	})
+	if err != nil {
+		t.Fatalf("expected err to be non-nil: %+v", err)
+	}
+
+	t1, err := st.InsertTemplate(ctx, store.AddTemplate{
+		TemplateID: "tmpl1",
+		GroupID:    g1.GroupID,
+		ProjectID:  p1.ProjectID,
+		Txt:        "Test Text",
+		HTML:       "<h1>Test HTML</h1>",
+	})
+	if err != nil {
+		t.Fatalf("expected err to be non-nil: %+v", err)
+	}
+
+	// get template tmpl1 from project p1
+	obj, err := st.GetTemplate(ctx, p1.ProjectID, "tmpl1")
+	if err != nil {
+		t.Fatalf("expected err to be non-nil: %+v", err)
+	}
+	assert.Equal(t, "tmpl1", obj.TemplateID)
+	assert.Equal(t, g1.GroupID, obj.GroupID)
+	assert.Equal(t, p1.ProjectID, obj.ProjectID)
+	assert.Equal(t, "Test Text", obj.Txt)
+	assert.Equal(t, "<h1>Test HTML</h1>", obj.HTML)
+	assert.Equal(t, time.Time(t1.CreatedAt), time.Time(obj.CreatedAt))
+	assert.Equal(t, time.Time(t1.ModifiedAt), time.Time(obj.ModifiedAt))
+
+	// get non-existent template from project p1
+	obj, err = st.GetTemplate(ctx, p1.ProjectID, "non-existent-template")
+	if err != store.ErrTemplateNotFound {
+		t.Fatalf("expected err to be store.ErrTemplateNotFound: %+v", err)
+	}
+	assert.Nil(t, obj, "expected obj to be nil")
+
+	// get template tmpl1 from non-existent project
+	obj, err = st.GetTemplate(ctx, "non-existent-project", "tmpl1")
+	if err != store.ErrProjectNotFound {
+		t.Fatalf("expected err to be store.ErrProjectNotFound: %+v", err)
+	}
+	assert.Nil(t, obj, "expected obj to be nil")
 }

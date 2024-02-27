@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql/driver"
+	"errors"
 	"time"
 )
 
@@ -16,6 +17,11 @@ type Repository interface {
 //
 // projects
 //
+
+var (
+	// ErrProjectNotFound is returned when a project is not found.
+	ErrProjectNotFound = errors.New("project not found")
+)
 
 // ProjectsRepository is the interface for the projects repository.
 type ProjectsRepository interface {
@@ -100,6 +106,11 @@ type AddSMTPTransport struct {
 // groups
 //
 
+var (
+	// ErrGroupNotFound is returned when a group is not found.
+	ErrGroupNotFound = errors.New("group not found")
+)
+
 type GroupsRepository interface {
 	// InsertGroup inserts a new group into the store
 	InsertGroup(ctx context.Context, params AddGroup) (*Group, error)
@@ -127,9 +138,17 @@ type AddGroup struct {
 // templates
 //
 
+var (
+	// ErrTemplateNotFound is returned when a template is not found.
+	ErrTemplateNotFound = errors.New("template not found")
+)
+
 type TemplatesRepository interface {
 	// InsertTemplate inserts a new template into the store
 	InsertTemplate(ctx context.Context, params AddTemplate) (*Template, error)
+
+	// GetTemplate gets a template from the store.
+	GetTemplate(ctx context.Context, projectID, templateID string) (*Template, error)
 }
 
 // Template represents an email template based on the schema.

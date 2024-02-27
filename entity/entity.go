@@ -89,3 +89,16 @@ type CreateTemplate struct {
 	HTML      string
 	Text      string
 }
+
+//
+// send email
+//
+
+// SendEmailParams is the input parameters for the SendEmail method.
+type SendEmailParams struct {
+	ProjectID      string
+	TemplateID     string
+	To             []string
+	Subject        string
+	TemplateParams map[string]string
+}

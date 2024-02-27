@@ -35,7 +35,7 @@ func (s *Service) CreateProject(ctx context.Context, id, name, description strin
 		Description: description,
 	})
 	if err != nil {
-		return nil, errors.Wrapf(err, "store.InsertProject failed")
+		return nil, errors.Wrapf(err, "[service] store.InsertProject failed")
 	}
 	return projectFromStoreObject(obj), nil
 }
@@ -67,7 +67,7 @@ func (s *Service) CreateSMTPTransport(ctx context.Context, params entity.CreateS
 		EmailReplyTo:      params.EmailReplyTo,
 	})
 	if err != nil {
-		return nil, errors.Wrapf(err, "store.InsertSMTPTransport failed")
+		return nil, errors.Wrapf(err, "[service] store.InsertSMTPTransport failed")
 	}
 	return smtpTransportFromStoreObject(obj), nil
 }
@@ -103,7 +103,7 @@ func (s *Service) CreateGroup(ctx context.Context, id, projectID, name string) (
 		ModifiedAt: now,
 	})
 	if err != nil {
-		return nil, errors.Wrapf(err, "store.InsertGroup failed")
+		return nil, errors.Wrapf(err, "[service] store.InsertGroup failed")
 	}
 	return groupFromStoreObject(obj), nil
 }
@@ -137,7 +137,7 @@ func (s *Service) CreateTemplate(ctx context.Context, params entity.CreateTempla
 		ModifiedAt: now,
 	})
 	if err != nil {
-		return nil, errors.Wrapf(err, "store.InsertTemplate failed")
+		return nil, errors.Wrapf(err, "[service] store.InsertTemplate failed")
 	}
 	return templateFromStoreObject(obj), nil
 }
@@ -155,11 +155,17 @@ func templateFromStoreObject(obj *store.Template) *entity.Template {
 }
 
 // SendEmail sends an email using the specified template.
-func (s *Service) SendEmail(ctx context.Context, subject, templateID string) error {
+func (s *Service) SendEmail(ctx context.Context, params entity.SendEmailParams) error {
+	// retrieve the template from the store
+	template, err := s.store.GetTemplate(ctx, params.ProjectID, params.TemplateID)
+	if err != nil {
+		return errors.Wrapf(err, "[service] store.GetTemplate failed")
+	}
+
 	return s.transport.SendEmail(email.EmailParams{
-		Subject: subject,
-		Text:    "Hello, World!",
-		HTML:    "<h1>Hello, World!</h1>",
-		To:      []string{"andy@andyfusniak.com"},
+		Subject: params.Subject,
+		Text:    template.Txt,
+		HTML:    template.HTML,
+		To:      params.To,
 	})
 }

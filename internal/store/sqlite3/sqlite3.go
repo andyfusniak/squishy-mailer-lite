@@ -12,6 +12,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	driversqlite3 "github.com/golang-migrate/migrate/v4/database/sqlite3"
 	"github.com/golang-migrate/migrate/v4/source/httpfs"
+	"github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
 )
 
@@ -54,6 +55,10 @@ func CreateSqliteDBSchema(db *sql.DB) error {
 
 	return nil
 }
+
+//
+// projects
+//
 
 // InsertProject inserts a new project into the store.
 func (q *Queries) InsertProject(ctx context.Context, params store.AddProject) (*store.Project, error) {
@@ -136,7 +141,8 @@ returning
 		&r.CreatedAt,
 		&r.ModifiedAt,
 	); err != nil {
-		return nil, errors.Wrapf(err, "[sqlite3:smtp_transports] query row scan failed query=%q", query)
+		return nil, errors.Wrapf(err,
+			"[sqlite3:smtp_transports] query row scan failed query=%q", query)
 	}
 	return &r, nil
 }
@@ -148,11 +154,11 @@ returning
 // InsertGroup inserts a new group into the store.
 func (q *Queries) InsertGroup(ctx context.Context, params store.AddGroup) (*store.Group, error) {
 	const query = `
-INSERT INTO groups
+insert into groups
   (group_id, project_id, group_name, created_at, modified_at)
-VALUES
+values
   (:group_id, :project_id, :group_name, :created_at, :modified_at)
-RETURNING
+returning
   group_id, project_id, group_name, created_at, modified_at
 	`
 	var r store.Group
@@ -170,8 +176,68 @@ RETURNING
 		&r.CreatedAt,
 		&r.ModifiedAt,
 	); err != nil {
-		return nil, errors.Wrapf(err, "[sqlite3:groups] query row scan failed query=%q", query)
+		// if sqlite3 returns a foreign key constraint error, then the project does not existing
+		// assert the underlying sqlite3 type
+		if serr, ok := err.(sqlite3.Error); ok {
+			// In the C API for SQLite, it is not directly possible to determine
+			// which specific foreign key constraint failed when multiple
+			// constraints are violated. The error message that is returned by
+			// SQLite does not provide this level of detail. However, since
+			// there is only one foreign key constraint in this case, we can
+			// assume that the constraint that failed was the foreign key
+			// constraint that references the projects table.
+			//
+			// see https://www.sqlite.org/rescode.html#constraint_foreignkey
+			if serr.Code == sqlite3.ErrConstraint && serr.ExtendedCode == sqlite3.ErrConstraintForeignKey {
+				return nil, store.ErrProjectNotFound
+			}
+		}
+
+		return nil, errors.Wrapf(err,
+			"[sqlite3:groups] query row scan failed query=%q", query)
 	}
+	return &r, nil
+}
+
+// GetGroup gets a group from the store.
+func (q *Queries) GetGroup(ctx context.Context, projectID, groupID string) (*store.Group, error) {
+	const query = `
+select
+  coalesce(g.group_id, '') as group_id,
+  p.project_id,
+  coalesce(g.group_name, '') as group_name,
+  coalesce(g.created_at, '1970-01-01T00:00:00.000000Z') as created_at,
+  coalesce(g.modified_at, '1970-01-01T00:00:00.000000Z') as modified_at
+from projects as p
+left outer join groups as g
+  on p.project_id = g.project_id
+  and g.group_id = :group_id
+where
+  p.project_id = :project_id
+`
+	var r store.Group
+	if err := q.readonly.QueryRowContext(ctx, query,
+		sql.Named("project_id", projectID),
+		sql.Named("group_id", groupID),
+	).Scan(
+		&r.GroupID,
+		&r.ProjectID,
+		&r.GroupName,
+		&r.CreatedAt,
+		&r.ModifiedAt,
+	); err != nil {
+		// if there are no rows returned, then the project does not exist
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, store.ErrProjectNotFound
+		}
+		return nil, errors.Wrapf(err,
+			"[sqlite3:groups] query row scan failed query=%q", query)
+	}
+
+	if r.GroupID == "" {
+		return nil, store.ErrGroupNotFound
+	}
+
 	return &r, nil
 }
 
@@ -182,11 +248,11 @@ RETURNING
 // InsertTemplate inserts a new template into the store.
 func (q *Queries) InsertTemplate(ctx context.Context, params store.AddTemplate) (*store.Template, error) {
 	const query = `
-INSERT INTO templates
+insert into templates
   (template_id, group_id, project_id, txt, html, created_at, modified_at)
-VALUES
+values
   (:template_id, :group_id, :project_id, :txt, :html, :created_at, :modified_at)
-RETURNING
+returning
   template_id, group_id, project_id, txt, html, created_at, modified_at
 `
 	var r store.Template
@@ -208,7 +274,57 @@ RETURNING
 		&r.CreatedAt,
 		&r.ModifiedAt,
 	); err != nil {
-		return nil, errors.Wrapf(err, "[sqlite3:templates] query row scan failed query=%q", query)
+		return nil, errors.Wrapf(err,
+			"[sqlite3:templates] query row scan failed query=%q", query)
 	}
+	return &r, nil
+}
+
+// GetTemplate gets a template from the store by projectID and templateID.
+// Templates are unique within a project. If the project is not found, an
+// error of type store.ErrProjectNotFound is returned. If the template is
+// not found, the error will be of type store.ErrTemplateNotFound.
+func (q *Queries) GetTemplate(ctx context.Context, projectID, templateID string) (*store.Template, error) {
+	const query = `
+select
+  coalesce(t.template_id, '') as template_id,
+  coalesce(t.group_id, '') as group_id,
+  p.project_id,
+  coalesce(t.txt, '') as txt,
+  coalesce(t.html, '') as html,
+  coalesce(t.created_at, '1970-01-01T00:00:00.000000Z') as created_at,
+  coalesce(t.modified_at, '1970-01-01T00:00:00.000000Z') as modified_at
+from projects as p
+left outer join templates as t
+  on p.project_id = t.project_id and t.template_id = :template_id
+where
+  p.project_id = :project_id
+`
+	var r store.Template
+	if err := q.readonly.QueryRowContext(ctx, query,
+		sql.Named("project_id", projectID),
+		sql.Named("template_id", templateID),
+	).Scan(
+		&r.TemplateID,
+		&r.GroupID,
+		&r.ProjectID,
+		&r.Txt,
+		&r.HTML,
+		&r.CreatedAt,
+		&r.ModifiedAt,
+	); err != nil {
+		// if there are no rows returned, then the project does not exist
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, store.ErrProjectNotFound
+		}
+
+		return nil, errors.Wrapf(err,
+			"[sqlite3:templates] query row scan failed query=%q", query)
+	}
+
+	if r.TemplateID == "" {
+		return nil, store.ErrTemplateNotFound
+	}
+
 	return &r, nil
 }

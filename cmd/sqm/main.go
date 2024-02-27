@@ -81,8 +81,6 @@ func run() error {
 
 	svc := service.NewEmailService(st, awsTransport)
 
-	svc.SendEmail(context.Background(), "My test subject line", "t1")
-
 	// create a new project to test the system
 	ctx := context.Background()
 	project, err := svc.CreateProject(ctx,
@@ -120,8 +118,8 @@ func run() error {
 		ID:        "t1",
 		ProjectID: project.ID,
 		GroupID:   group.ID,
-		HTML:      "<h1>Welcome to the Cloud</h1>",
-		Text:      "Welcome to the Cloud",
+		HTML:      "<h1>Welcome {{.firstname}}, to the Cloud</h1>",
+		Text:      "Welcome {{.firstname}}, to the Cloud",
 	})
 	if err != nil {
 		return err
@@ -129,7 +127,15 @@ func run() error {
 	fmt.Printf("template: %#v\n", template)
 
 	// send a test email
-	if err := svc.SendEmail(ctx, "My test subject line", template.ID); err != nil {
+	if err := svc.SendEmail(ctx, entity.SendEmailParams{
+		ProjectID:  project.ID,
+		TemplateID: template.ID,
+		To:         []string{"andy@andyfusniak.com"},
+		Subject:    "My test subject line",
+		TemplateParams: map[string]string{
+			"firstname": "Andy",
+		},
+	}); err != nil {
 		return err
 	}
 
