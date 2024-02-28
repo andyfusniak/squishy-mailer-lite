@@ -1,7 +1,10 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha512"
+	"encoding/hex"
 	"io"
 	"os"
 	"strings"
@@ -12,20 +15,28 @@ import (
 
 	"github.com/andyfusniak/squishy-mailer-lite/entity"
 	"github.com/andyfusniak/squishy-mailer-lite/internal/email"
+	"github.com/andyfusniak/squishy-mailer-lite/internal/secrets"
+
 	"github.com/andyfusniak/squishy-mailer-lite/internal/store"
+
 	"github.com/pkg/errors"
 )
 
 type Service struct {
-	store     store.Repository
-	transport email.Sender
+	store         store.Repository
+	transport     email.Sender
+	encryptionKey []byte
 }
 
-// NewEmailService creates a new service with the specified store and sender.
-func NewEmailService(store store.Repository, transport email.Sender) *Service {
+// NewEmailService creates a new service with the specified store, sender and
+// encryption key encKey. The encryption key is used to encrypt and decrypt
+// sensitive data such as passwords. It must be 16 bytes in length (128 bits).
+// NewEmailService is hard-coded to use AES-GCM with a random nonce.
+func NewEmailService(store store.Repository, transport email.Sender, encKey []byte) *Service {
 	return &Service{
-		store:     store,
-		transport: transport,
+		store:         store,
+		transport:     transport,
+		encryptionKey: encKey,
 	}
 }
 
@@ -61,13 +72,27 @@ func projectFromStoreObject(obj *store.Project) *entity.Project {
 
 // CreateSMTPTransport creates a new SMTP transport.
 func (s *Service) CreateSMTPTransport(ctx context.Context, params entity.CreateSMTPTransport) (*entity.SMTPTransport, error) {
+	// encrypt the plaintext password to a hex encoded ciphertext representation.
+	// The plaintext password is never stored in the store and the ciphertext
+	// is stored in its place.
+	mgr, err := secrets.New(secrets.AESGCMWithRandomNonce, s.encryptionKey)
+	if err != nil {
+		return nil, errors.Wrapf(err, "[service] secrets.New failed")
+	}
+	nonce, ciphertext, err := mgr.EncryptHexEncode(params.Password)
+	if err != nil {
+		return nil, errors.Wrapf(err, "[service] mgr.EncryptHexEncode failed")
+	}
+	encryptedPassword := nonce + ciphertext
+
 	obj, err := s.store.InsertSMTPTransport(ctx, store.AddSMTPTransport{
-		SMTPTransportID:   params.ID,
-		ProjectID:         params.ProjectID,
-		TransportName:     params.Name,
-		Host:              params.Host,
-		Port:              params.Port,
-		EncryptedPassword: params.Password, // TODO encrypt the password
+		SMTPTransportID: params.ID,
+		ProjectID:       params.ProjectID,
+		TransportName:   params.Name,
+		Host:            params.Host,
+		Port:            params.Port,
+		// hex encoded nonce (12 bytes) + AES GCM encrypted password
+		EncryptedPassword: encryptedPassword,
 		Username:          params.Username,
 		EmailFrom:         params.EmailFrom,
 		EmailReplyTo:      params.EmailReplyTo,
@@ -137,8 +162,10 @@ func (s *Service) CreateTemplate(ctx context.Context, params entity.CreateTempla
 		TemplateID: params.ID,
 		ProjectID:  params.ProjectID,
 		GroupID:    params.GroupID,
-		HTML:       params.HTML,
 		Txt:        params.Text,
+		TxtDigest:  params.TextDigest,
+		HTML:       params.HTML,
+		HTMLDigest: params.HTMLDigest,
 		CreatedAt:  now,
 		ModifiedAt: now,
 	})
@@ -153,8 +180,10 @@ func templateFromStoreObject(obj *store.Template) *entity.Template {
 		ID:         obj.TemplateID,
 		ProjectID:  obj.ProjectID,
 		GroupID:    obj.GroupID,
-		HTML:       obj.HTML,
 		Text:       obj.Txt,
+		TextDigest: obj.TxtDigest,
+		HTML:       obj.HTML,
+		HTMLDigest: obj.HTMLDigest,
 		CreatedAt:  entity.ISOTime(obj.CreatedAt),
 		ModifiedAt: entity.ISOTime(obj.ModifiedAt),
 	}
@@ -193,52 +222,66 @@ func checkTemplates(mode templateType, filenames ...string) error {
 	return nil
 }
 
-func amalgalateTemplates(filenames []string) (string, error) {
-	// concat the filenames into a single string
-	var sb strings.Builder
+func amalgalateTemplates(filenames []string) ([]byte, error) {
+	// concat the filenames into a buffer
+	var buf bytes.Buffer
+
 	for _, f := range filenames {
 		// read the file into a string
 		// and append it to the txt and html strings
 		content, err := os.ReadFile(f)
 		if err != nil {
-			return "", errors.Wrapf(err, "[service] os.ReadFile failed")
+			return nil, errors.Wrapf(err, "[service] os.ReadFile failed")
 		}
-		_, err = sb.Write(content)
+		_, err = buf.Write(content)
 		if err != nil {
-			return "", errors.Wrapf(err, "[service] sbTxt.Write failed")
+			return nil, errors.Wrapf(err, "[service] sbTxt.Write failed")
 		}
 	}
 
-	return sb.String(), nil
+	return buf.Bytes(), nil
 }
 
 // CreateTemplateFromFiles creates a new template from the specified files.
 func (s *Service) CreateTemplateFromFiles(ctx context.Context, params entity.CreateTemplateFromFiles) (*entity.Template, error) {
-	// check the txt and html templates for errors
+	// txt templates
 	if err := checkTemplates(txtTemplate, params.TxtFilenames...); err != nil {
 		return nil, errors.Wrapf(err, "[service] checkTemplates txt failed")
 	}
-	if err := checkTemplates(htmlTemplate, params.HTMLFilenames...); err != nil {
-		return nil, errors.Wrapf(err, "[service] checkTemplates html failed")
-	}
-
-	// amalgalate the txt and html templates into a single string
+	// amalgalate the txt templates into a single string
 	txt, err := amalgalateTemplates(params.TxtFilenames)
 	if err != nil {
 		return nil, errors.Wrapf(err, "[service] amalgalateTemplates txt failed")
 	}
+	// create a SHA512 (224 bit) hash of the text template amalgalated string
+	hash := sha512.New512_224()
+	hash.Write(txt)
+	sum := hash.Sum(nil)
+	txtCS := hex.EncodeToString(sum[0:16])
+
+	// html templates
+	if err := checkTemplates(htmlTemplate, params.HTMLFilenames...); err != nil {
+		return nil, errors.Wrapf(err, "[service] checkTemplates html failed")
+	}
+	// amalgalate the html templates into a single string
 	html, err := amalgalateTemplates(params.HTMLFilenames)
 	if err != nil {
 		return nil, errors.Wrapf(err, "[service] amalgalateTemplates html failed")
 	}
+	// create a SHA512 (224 bit) hash of the html template amalgalated string
+	hash = sha512.New512_224()
+	hash.Write(html)
+	sum = hash.Sum(nil)
+	htmlCS := hex.EncodeToString(sum[0:16])
 
-	// create the template
 	return s.CreateTemplate(ctx, entity.CreateTemplate{
-		ID:        params.ID,
-		ProjectID: params.ProjectID,
-		GroupID:   params.GroupID,
-		HTML:      html,
-		Text:      txt,
+		ID:         params.ID,
+		ProjectID:  params.ProjectID,
+		GroupID:    params.GroupID,
+		Text:       string(txt),
+		TextDigest: txtCS,
+		HTML:       string(html),
+		HTMLDigest: htmlCS,
 	})
 }
 

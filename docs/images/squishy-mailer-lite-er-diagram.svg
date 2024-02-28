@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="608" height="368" class="svgbob"><style>.svgbob line, .svgbob path, .svgbob circle, .svgbob rect, .svgbob polygon {
+    stroke: black;
+    stroke-width: 2;
+    stroke-opacity: 1;
+    fill-opacity: 1;
+    stroke-linecap: round;
+    stroke-linejoin: miter;
+}
+.svgbob text {
+    white-space: pre;
+    fill: black;
+    font-family: Iosevka Fixed, monospace;
+    font-size: 14px;
+}
+.svgbob rect.backdrop {
+    stroke: none;
+    fill: white;
+}
+.svgbob .broken {
+    stroke-dasharray: 8;
+}
+.svgbob .filled {
+    fill: black;
+}
+.svgbob .bg_filled {
+    fill: white;
+    stroke-width: 1;
+}
+.svgbob .nofill {
+    fill: white;
+}
+.svgbob .end_marked_arrow {
+    marker-end: url(#arrow);
+}
+.svgbob .start_marked_arrow {
+    marker-start: url(#arrow);
+}
+.svgbob .end_marked_diamond {
+    marker-end: url(#diamond);
+}
+.svgbob .start_marked_diamond {
+    marker-start: url(#diamond);
+}
+.svgbob .end_marked_circle {
+    marker-end: url(#circle);
+}
+.svgbob .start_marked_circle {
+    marker-start: url(#circle);
+}
+.svgbob .end_marked_open_circle {
+    marker-end: url(#open_circle);
+}
+.svgbob .start_marked_open_circle {
+    marker-start: url(#open_circle);
+}
+.svgbob .end_marked_big_open_circle {
+    marker-end: url(#big_open_circle);
+}
+.svgbob .start_marked_big_open_circle {
+    marker-start: url(#big_open_circle);
+}<!--separator--></style><defs><marker id="arrow" viewBox="-2 -2 8 8" refX="4" refY="2" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><polygon points="0,0 0,4 4,2 0,0"></polygon></marker><marker id="diamond" viewBox="-2 -2 8 8" refX="4" refY="2" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><polygon points="0,2 2,0 4,2 2,4 0,2"></polygon></marker><marker id="circle" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><circle cx="4" cy="4" r="2" class="filled"></circle></marker><marker id="open_circle" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><circle cx="4" cy="4" r="2" class="bg_filled"></circle></marker><marker id="big_open_circle" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><circle cx="4" cy="4" r="3" class="bg_filled"></circle></marker></defs><rect class="backdrop" x="0" y="0" width="608" height="368"></rect><rect x="4" y="24" width="160" height="64" class="solid nofill" rx="0"></rect><text x="42" y="60" >mail_queue</text><rect x="436" y="152" width="160" height="64" class="solid nofill" rx="0"></rect><text x="482" y="188" >templates</text><rect x="4" y="280" width="160" height="64" class="solid nofill" rx="0"></rect><text x="26" y="316" >smtp_transports</text><polygon points="72,108 76,96 80,108" class="filled"></polygon><line x1="76" y1="108" x2="76" y2="144" class="solid"></line><text x="90" y="140" >1</text><text x="170" y="172" >1</text><text x="210" y="172" >m</text><text x="386" y="172" >1</text><text x="426" y="172" >m</text><polygon points="208,180 216,184 208,188" class="filled"></polygon><polygon points="424,180 432,184 424,188" class="filled"></polygon><line x1="76" y1="224" x2="76" y2="260" class="solid"></line><text x="90" y="236" >1</text><polygon points="72,260 80,260 76,272" class="filled"></polygon><text x="90" y="108" >m</text><text x="90" y="268" >m</text><text x="50" y="188" >projects</text><text x="274" y="188" >groups</text><g><line x1="4" y1="152" x2="164" y2="152" class="solid"></line><line x1="4" y1="152" x2="4" y2="216" class="solid"></line><line x1="164" y1="152" x2="164" y2="216" class="solid"></line><line x1="164" y1="184" x2="208" y2="184" class="solid"></line><line x1="4" y1="216" x2="164" y2="216" class="solid"></line></g><g><line x1="220" y1="152" x2="380" y2="152" class="solid"></line><line x1="220" y1="152" x2="220" y2="216" class="solid"></line><line x1="380" y1="152" x2="380" y2="216" class="solid"></line><line x1="380" y1="184" x2="424" y2="184" class="solid"></line><line x1="220" y1="216" x2="380" y2="216" class="solid"></line></g></svg>

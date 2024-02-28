@@ -79,7 +79,8 @@ func run() error {
 		From:     "support@ravenmailer.com",
 	})
 
-	svc := service.NewEmailService(st, awsTransport)
+	encryptionKey := []byte("1234567890123456")
+	svc := service.NewEmailService(st, awsTransport, encryptionKey)
 
 	// create a new project to test the system
 	ctx := context.Background()

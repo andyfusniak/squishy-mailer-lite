@@ -75,19 +75,23 @@ type Template struct {
 	ID         string
 	GroupID    string
 	ProjectID  string
-	HTML       string
 	Text       string
+	TextDigest string
+	HTML       string
+	HTMLDigest string
 	CreatedAt  ISOTime
 	ModifiedAt ISOTime
 }
 
 // CreateTemplate is the input parameters for the CreateTemplate method.
 type CreateTemplate struct {
-	ID        string
-	GroupID   string
-	ProjectID string
-	HTML      string
-	Text      string
+	ID         string
+	GroupID    string
+	ProjectID  string
+	Text       string
+	TextDigest string
+	HTML       string
+	HTMLDigest string
 }
 
 // CreateTemplateFromFiles is the input parameters for the CreateTemplateFromFiles method.
@@ -95,8 +99,8 @@ type CreateTemplateFromFiles struct {
 	ID            string
 	GroupID       string
 	ProjectID     string
-	HTMLFilenames []string
 	TxtFilenames  []string
+	HTMLFilenames []string
 }
 
 //

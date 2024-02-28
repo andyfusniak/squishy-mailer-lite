@@ -157,7 +157,9 @@ type Template struct {
 	GroupID    string
 	ProjectID  string
 	Txt        string
+	TxtDigest  string
 	HTML       string
+	HTMLDigest string
 	CreatedAt  Datetime
 	ModifiedAt Datetime
 }
@@ -168,7 +170,9 @@ type AddTemplate struct {
 	GroupID    string
 	ProjectID  string
 	Txt        string
+	TxtDigest  string
 	HTML       string
+	HTMLDigest string
 	CreatedAt  Datetime
 	ModifiedAt Datetime
 }

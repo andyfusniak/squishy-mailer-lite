@@ -249,11 +249,11 @@ where
 func (q *Queries) InsertTemplate(ctx context.Context, params store.AddTemplate) (*store.Template, error) {
 	const query = `
 insert into templates
-  (template_id, group_id, project_id, txt, html, created_at, modified_at)
+  (template_id, group_id, project_id, txt, txt_digest, html, html_digest, created_at, modified_at)
 values
-  (:template_id, :group_id, :project_id, :txt, :html, :created_at, :modified_at)
+  (:template_id, :group_id, :project_id, :txt, :txt_digest, :html, :html_digest, :created_at, :modified_at)
 returning
-  template_id, group_id, project_id, txt, html, created_at, modified_at
+  template_id, group_id, project_id, txt, txt_digest, html, html_digest, created_at, modified_at
 `
 	var r store.Template
 	now := store.Datetime(time.Now().UTC())
@@ -262,7 +262,9 @@ returning
 		sql.Named("group_id", params.GroupID),
 		sql.Named("project_id", params.ProjectID),
 		sql.Named("txt", params.Txt),
+		sql.Named("txt_digest", params.TxtDigest),
 		sql.Named("html", params.HTML),
+		sql.Named("html_digest", params.HTMLDigest),
 		sql.Named("created_at", &now),
 		sql.Named("modified_at", &now),
 	).Scan(
@@ -270,7 +272,9 @@ returning
 		&r.GroupID,
 		&r.ProjectID,
 		&r.Txt,
+		&r.TxtDigest,
 		&r.HTML,
+		&r.HTMLDigest,
 		&r.CreatedAt,
 		&r.ModifiedAt,
 	); err != nil {
