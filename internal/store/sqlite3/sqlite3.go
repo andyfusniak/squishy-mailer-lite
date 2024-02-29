@@ -19,15 +19,37 @@ import (
 // Store memberships store.
 type Store struct {
 	*Queries
-	rw *sql.DB
 }
 
 // NewStore returns a new store.
 func NewStore(ro, rw *sql.DB) *Store {
 	return &Store{
-		rw:      rw,
 		Queries: NewQueries(ro, rw),
 	}
+}
+
+// Close the store.
+func (s *Store) Close() error {
+	var isReadOnlyErr, isReadWriteErr bool
+	if err := s.readwrite.Close(); err != nil {
+		isReadWriteErr = true
+	}
+	if err := s.readonly.Close(); err != nil {
+		isReadWriteErr = true
+	}
+
+	// report any errors
+	if isReadOnlyErr || isReadWriteErr {
+		if isReadOnlyErr && isReadWriteErr {
+			return errors.New("failed to close both database connections")
+		} else if isReadWriteErr {
+			return errors.New("failed to close the read-write database connection")
+		} else if isReadOnlyErr {
+			return errors.New("failed to close the read-only database connection")
+		}
+	}
+
+	return nil
 }
 
 // CreateSQLiteDBSchema creates the tables using the schema for
@@ -83,6 +105,41 @@ returning
 		&r.Description,
 		&r.CreatedAt,
 	); err != nil {
+		if serr, ok := err.(sqlite3.Error); ok {
+			if serr.Code == sqlite3.ErrConstraint &&
+				serr.ExtendedCode == sqlite3.ErrConstraintPrimaryKey {
+				return nil, store.NewStoreError(store.ErrProjectAlreadyExists, err)
+			}
+		}
+		return nil, errors.Wrapf(err,
+			"[sqlite3:projects] query row scan failed query=%q", query)
+	}
+	return &r, nil
+}
+
+// GetProject gets a project from the store by projectID. If the project is
+// not found, an error of type store.ErrProjectNotFound is returned.
+func (q *Queries) GetProject(ctx context.Context, projectID string) (*store.Project, error) {
+	const query = `
+select
+  p.project_id, p.project_name, description, p.created_at
+from projects as p
+where
+  p.project_id = :project_id
+`
+	var r store.Project
+	if err := q.readonly.QueryRowContext(ctx, query,
+		sql.Named("project_id", projectID),
+	).Scan(
+		&r.ProjectID,
+		&r.ProjectName,
+		&r.Description,
+		&r.CreatedAt,
+	); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, store.NewStoreError(store.ErrProjectNotFound, err)
+		}
+
 		return nil, errors.Wrapf(err,
 			"[sqlite3:projects] query row scan failed query=%q", query)
 	}
@@ -200,7 +257,7 @@ where
 	); err != nil {
 		// if there are no rows returned, then the project does not exist
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, store.ErrProjectNotFound
+			return nil, store.NewStoreError(store.ErrProjectNotFound, err)
 		}
 
 		return nil, errors.Wrapf(err,
@@ -256,7 +313,7 @@ returning
 			//
 			// see https://www.sqlite.org/rescode.html#constraint_foreignkey
 			if serr.Code == sqlite3.ErrConstraint && serr.ExtendedCode == sqlite3.ErrConstraintForeignKey {
-				return nil, store.ErrProjectNotFound
+				return nil, store.NewStoreError(store.ErrProjectNotFound, serr)
 			}
 		}
 
@@ -295,14 +352,14 @@ where
 	); err != nil {
 		// if there are no rows returned, then the project does not exist
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, store.ErrProjectNotFound
+			return nil, store.NewStoreError(store.ErrProjectNotFound, err)
 		}
 		return nil, errors.Wrapf(err,
 			"[sqlite3:groups] query row scan failed query=%q", query)
 	}
 
 	if r.GroupID == "" {
-		return nil, store.ErrGroupNotFound
+		return nil, store.NewStoreError(store.ErrGroupNotFound, nil)
 	}
 
 	return &r, nil
@@ -386,7 +443,7 @@ where
 	); err != nil {
 		// if there are no rows returned, then the project does not exist
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, store.ErrProjectNotFound
+			return nil, store.NewStoreError(store.ErrProjectNotFound, err)
 		}
 
 		return nil, errors.Wrapf(err,

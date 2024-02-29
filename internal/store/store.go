@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -13,21 +14,62 @@ type Repository interface {
 	SMTPTransportsRepository
 	GroupsRepository
 	TemplatesRepository
+	Close() error
 }
 
 //
 // projects
 //
 
-var (
-	// ErrProjectNotFound is returned when a project is not found.
-	ErrProjectNotFound = errors.New("project not found")
+// create a list of error codes
+const (
+	ErrProjectAlreadyExists = "project_already_exists"
+	ErrProjectNotFound      = "project_not_found"
+	ErrGroupNotFound        = "group_not_found"
 )
+
+// ErrCode is a custom type for error codes.
+type ErrCode string
+
+var mapErrCodeToMessage = map[ErrCode]string{
+	ErrProjectAlreadyExists: "project already exists",
+	ErrProjectNotFound:      "project not found",
+	ErrGroupNotFound:        "group not found",
+}
+
+// ServiceError is a custom error type.
+type Error struct {
+	Code ErrCode
+	Msg  string
+	err  error
+}
+
+// Error returns the error message.
+func (e *Error) Error() string {
+	return fmt.Sprintf("%s: %s\n", e.Code, mapErrCodeToMessage[e.Code])
+}
+
+// Unwrap returns the underlying error.
+func (e *Error) Unwrap() error {
+	return e.err
+}
+
+// NewStoreError creates a new Error with a code and an error.
+func NewStoreError(code ErrCode, err error) *Error {
+	return &Error{
+		Code: code,
+		Msg:  mapErrCodeToMessage[code],
+		err:  err,
+	}
+}
 
 // ProjectsRepository is the interface for the projects repository.
 type ProjectsRepository interface {
 	// InsertProject inserts a new project into the store
 	InsertProject(ctx context.Context, params AddProject) (*Project, error)
+
+	// GetProject gets a project from the store.
+	GetProject(ctx context.Context, projectID string) (*Project, error)
 }
 
 // Project represents an individual project.
@@ -138,11 +180,6 @@ type AddSMTPTransport struct {
 //
 // groups
 //
-
-var (
-	// ErrGroupNotFound is returned when a group is not found.
-	ErrGroupNotFound = errors.New("group not found")
-)
 
 type GroupsRepository interface {
 	// InsertGroup inserts a new group into the store

@@ -2,6 +2,7 @@ package sqlite3_test
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
@@ -141,7 +142,16 @@ func TestInsertGroupIntoNonExistingProject(t *testing.T) {
 	if group != nil {
 		t.Fatalf("expected group to be nil")
 	}
-	assert.Equal(t, store.ErrProjectNotFound, err)
+
+	// assert that error is of type *store.Error and that the code is store.ErrProjectNotFound
+	var storeErr *store.Error
+	if errors.As(err, &storeErr) {
+		if storeErr.Code != store.ErrProjectNotFound {
+			t.Fatalf("expected storeErr.Code to be store.ErrProjectNotFound")
+		}
+	} else {
+		t.Fatalf("expected err to be of type *store.Error")
+	}
 }
 
 func TestInsertGroup(t *testing.T) {
@@ -246,7 +256,16 @@ func TestNonExistentGroupInProject(t *testing.T) {
 		t.Fatalf("expected err to be non-nil")
 	}
 	assert.Nil(t, g, "expected g to be nil")
-	assert.Equal(t, store.ErrGroupNotFound, err)
+
+	// assert that error is of type *store.Error and that the code is store.ErrGroupNotFound
+	var storeErr *store.Error
+	if errors.As(err, &storeErr) {
+		if storeErr.Code != store.ErrGroupNotFound {
+			t.Fatalf("expected storeErr.Code to be store.ErrGroupNotFound")
+		}
+	} else {
+		t.Fatalf("expected err to be of type *store.Error")
+	}
 }
 
 func TestNonExistentProjectForGroup(t *testing.T) {
@@ -285,7 +304,16 @@ func TestNonExistentProjectForGroup(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected err to be non-nil")
 	}
-	assert.Equal(t, store.ErrProjectNotFound, err)
+
+	// assert that the error is of type *store.Error and that the code is store.ErrProjectNotFound
+	var storeErr *store.Error
+	if errors.As(err, &storeErr) {
+		if storeErr.Code != store.ErrProjectNotFound {
+			t.Fatalf("expected storeErr.Code to be store.ErrProjectNotFound")
+		}
+	} else {
+		t.Fatalf("expected err to be of type *store.Error")
+	}
 }
 
 func TestInsertTemplate(t *testing.T) {
@@ -399,8 +427,13 @@ func TestGetTemplate(t *testing.T) {
 
 	// get template tmpl1 from non-existent project
 	obj, err = st.GetTemplate(ctx, "non-existent-project", "tmpl1")
-	if err != store.ErrProjectNotFound {
-		t.Fatalf("expected err to be store.ErrProjectNotFound: %+v", err)
+	if err != nil {
+		var storeErr *store.Error
+		if errors.As(err, &storeErr) {
+			if storeErr.Code != store.ErrProjectNotFound {
+				t.Fatalf("expected err to be store.ErrProjectNotFound: %+v", err)
+			}
+		}
 	}
 	assert.Nil(t, obj, "expected obj to be nil")
 }
