@@ -1,5 +1,27 @@
 package service
 
+// The service package contains the business logic for the email service.
+
+// The service is used to create projects, transports, groups and templates.
+// The service is also used to send emails using templates and transports.
+// It uses a store to persist and retrieve data from a database. The service
+// uses an encryption key to encrypt and decrypt sensitive data such as
+// passwords.
+//
+// The service can be configured using the WithStore, WithEncryptionKey,
+// WithHexEncodedEncryptionKey and WithSqlite3DBFilepath options. If no store
+// is specified, the service will use a default pre-configured store. However,
+// without an encryption key the service cannot be used, and so will return
+// an error. If no database file path is specified, the service will choose
+// mailer.db in the current working directory as its data store by default.
+// The default store is a SQLite3 database that uses some sensible defaults
+// for the database connection pool.
+
+// You can substitute the default store with your own store by implementing
+// the store.Repository interface. The service will use the store to persist
+// and retrieve data. If you implement your own store, you can use the
+// WithStore option to specify your store when creating the service. The
+// WithSqlite3DBFilepath option would not be used in this case.
 import (
 	"bytes"
 	"context"
@@ -29,6 +51,9 @@ import (
 type Service struct {
 	store         store.Repository
 	encryptionKey []byte
+	isHexInvalid  bool
+
+	dbfilepath string
 }
 
 // options
@@ -56,15 +81,41 @@ func WithEncryptionKey(encKey []byte) Option {
 	}
 }
 
-// WithHexEncodedEncryptionKey accepts a hex encoded encryption key and
-// sets the encryption key to the decoded byte slice.
+// WithHexEncodedEncryptionKey accepts a hex encoded encryption key as a
+// string. The encryption key is used to encrypt and decrypt sensitive data
+// such as passwords. It must be 32 characters in length, representing
+// 16 bytes (or 128 bits).
 func WithHexEncodedEncryptionKey(encKey string) Option {
 	return func(s *Service) {
-		s.encryptionKey, _ = hex.DecodeString(encKey)
+		var err error
+		s.encryptionKey, err = hex.DecodeString(encKey)
+		if err != nil {
+			s.isHexInvalid = true
+		}
 	}
 }
 
-// NewEmailService creates a new email service.
+// WithSqlite3DBFilepath accepts a string database file path and sets the
+// database file path to the specified value. The database file path is used
+// to persist and retrieve data from a database. If no database file path is
+// specified, the service will use mailer.db in the current working directory
+// as the default. This option is only used if no store is specified.
+func WithSqlite3DBFilepath(dbfilepath string) Option {
+	return func(s *Service) {
+		s.dbfilepath = dbfilepath
+	}
+}
+
+// NewEmailService creates a new email service. The service is used to
+// create, retrieve and send emails using templates and transports.
+// The service uses a store to persist and retrieve data from a database.
+// The service uses an encryption key to encrypt and decrypt sensitive data
+// such as passwords. The service can be configured using the WithStore,
+// WithEncryptionKey, WithHexEncodedEncryptionKey and WithSqlite3DBFilepath
+// options. If no store is specified, the service will use a default
+// pre-configured store. If no encryption key is specified, the service will
+// return an error. If no database file path is specified, the service will
+// use mailer.db in the current working directory as the default.
 func NewEmailService(opts ...Option) (*Service, error) {
 	s := &Service{}
 	for _, opt := range opts {
@@ -73,7 +124,7 @@ func NewEmailService(opts ...Option) (*Service, error) {
 
 	// if no store was specified, use the default store
 	if s.store == nil {
-		rw, ro, err := defaultSqlite3DBs()
+		rw, ro, err := defaultSqlite3DBs(s.dbfilepath)
 		if err != nil {
 			return nil, errors.Wrapf(err, "[service] defaultSqlite3DBs failed")
 		}
@@ -84,6 +135,12 @@ func NewEmailService(opts ...Option) (*Service, error) {
 	if s.encryptionKey == nil {
 		return nil, errors.New(
 			"[service] no encryption key specified use WithEncryptionKey or WithHexEncodedEncryptionKey options")
+	}
+
+	// if the hex encoded encryption key is invalid we cannot continue
+	if s.isHexInvalid {
+		return nil, errors.New(
+			"[service] hex encoded encryption key is invalid - must be 32 characters [0-9a-f]")
 	}
 
 	return s, nil
@@ -100,24 +157,29 @@ const (
 	defaultDBFilepath   string = "mailer.db"
 )
 
-func defaultSqlite3DBs() (rw, ro *sql.DB, err error) {
-	var createDB bool
-	if _, err := os.Stat(defaultDBFilepath); os.IsNotExist(err) {
-		createDB = true
+func defaultSqlite3DBs(dbfilepath string) (rw, ro *sql.DB, err error) {
+	// if no database file path was specified use the default
+	if dbfilepath == "" {
+		dbfilepath = defaultDBFilepath
+	}
+
+	// check if the database file exists
+	var shouldCreateDB bool
+	if _, err := os.Stat(dbfilepath); os.IsNotExist(err) {
+		shouldCreateDB = true
 	}
 
 	// set up two database connections; one read-only with high concurrency
 	// and one read-write for non-concurrent queries
-	rw, err = sqlite3.OpenDB(defaultDBFilepath)
+	rw, err = sqlite3.OpenDB(dbfilepath)
 	if err != nil {
 		return nil, nil, err
 	}
-
 	rw.SetMaxOpenConns(1)
 	rw.SetMaxIdleConns(1)
 	rw.SetConnMaxIdleTime(5 * time.Minute)
 
-	ro, err = sqlite3.OpenDB(defaultDBFilepath)
+	ro, err = sqlite3.OpenDB(dbfilepath)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -126,7 +188,7 @@ func defaultSqlite3DBs() (rw, ro *sql.DB, err error) {
 	ro.SetConnMaxIdleTime(5 * time.Minute)
 
 	// if the database file did not exist, create the schema
-	if createDB {
+	if shouldCreateDB {
 		if err := sqlite3.CreateSqliteDBSchema(rw); err != nil {
 			return nil, nil, fmt.Errorf("[service] failed to create database schema: %w", err)
 		}
@@ -188,7 +250,9 @@ func projectFromStoreObject(obj *store.Project) *entity.Project {
 // transports
 //
 
-// CreateSMTPTransport creates a new SMTP transport.
+// CreateSMTPTransport creates a new SMTP transport. A transport is used to
+// send emails. Transports are project specific. A project can have many
+// transports. Transport id's are unique within a project.
 func (s *Service) CreateSMTPTransport(ctx context.Context, params entity.CreateSMTPTransport) (*entity.SMTPTransport, error) {
 	// encrypt the plaintext password to a hex encoded ciphertext representation.
 	// The plaintext password is never stored in the store and the ciphertext
@@ -222,6 +286,11 @@ func (s *Service) CreateSMTPTransport(ctx context.Context, params entity.CreateS
 	return smtpTransportFromStoreObject(obj), nil
 }
 
+// GetSMTPTransport retrieves an SMTP transport by its id and project id.
+// Each transport is unique within a project so every transport must be
+// uniquely identified by its id and project id combination. If the
+// transport is not found an error is return with a code
+// of ErrSMTPTransportNotFound.
 func (s *Service) GetSMTPTransport(ctx context.Context, transportID, projectID string) (*entity.SMTPTransport, error) {
 	obj, err := s.store.GetSMTPTransport(ctx, transportID, projectID)
 	if err != nil {
