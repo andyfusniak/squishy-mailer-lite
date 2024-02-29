@@ -8,7 +8,6 @@ import (
 
 	"github.com/andyfusniak/squishy-mailer-lite/entity"
 
-	"github.com/andyfusniak/squishy-mailer-lite/internal/email"
 	"github.com/andyfusniak/squishy-mailer-lite/internal/store/sqlite3"
 	"github.com/andyfusniak/squishy-mailer-lite/service"
 )
@@ -20,7 +19,7 @@ const (
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
+		fmt.Fprintf(os.Stderr, "%+v\n", err)
 		os.Exit(1)
 	}
 }
@@ -70,17 +69,17 @@ func run() error {
 	// create the store and service
 	st := sqlite3.NewStore(rw, rw)
 
-	awsTransport := email.NewAWSSMTPTransport("transport1", email.AWSConfig{
-		Host:     "email-smtp.us-east-1.amazonaws.com",
-		Port:     "587",
-		Username: "<username>",
-		Password: "<password>",
-		Name:     "Squishy Mailer Lite",
-		From:     "support@ravenmailer.com",
-	})
+	// awsTransport := email.NewAWSSMTPTransport("transport1", email.AWSConfig{
+	// 	Host:     "",
+	// 	Port:     "587",
+	// 	Username: "AKIATCOJOXG4WBSHDPRH",
+	// 	Password: "BF9dVRS+E0sF03KgPKS09TlamMXqlyvgN4MtPKl02JJt",
+	// 	Name:     "Squishy Mailer Lite",
+	// 	From:     "support@ravenmailer.com",
+	// })
 
 	encryptionKey := []byte("1234567890123456")
-	svc := service.NewEmailService(st, awsTransport, encryptionKey)
+	svc := service.NewEmailService(st, encryptionKey)
 
 	// create a new project to test the system
 	ctx := context.Background()
@@ -94,15 +93,16 @@ func run() error {
 	fmt.Printf("project: %+v\n", project)
 
 	smtp, err := svc.CreateSMTPTransport(ctx, entity.CreateSMTPTransport{
-		ID:           "the-cloud-transport",
-		ProjectID:    project.ID,
-		Name:         "The Cloud SMTP",
-		Host:         "smtp.sendgrid.net",
-		Port:         587,
-		Username:     "example",
-		Password:     "secret",
-		EmailFrom:    "info@example.com",
-		EmailReplyTo: "info@example.com",
+		ID:            "the-cloud-transport",
+		ProjectID:     project.ID,
+		Name:          "Squishy Mailer Lite Transport",
+		Host:          "email-smtp.us-east-1.amazonaws.com",
+		Port:          587,
+		Username:      "<username>",
+		Password:      "<password>",
+		EmailFrom:     "support@ravenmailer.com",
+		EmailFromName: "Raven Mailer Support",
+		EmailReplyTo:  []string{"support@ravenmailer.com"},
 	})
 	if err != nil {
 		return err
@@ -146,10 +146,11 @@ func run() error {
 
 	// send a test email
 	if err := svc.SendEmail(ctx, entity.SendEmailParams{
-		TemplateID: template.ID,
-		ProjectID:  project.ID,
-		To:         []string{"andy@andyfusniak.com"},
-		Subject:    "My test subject line",
+		TemplateID:  template.ID,
+		ProjectID:   project.ID,
+		TransportID: "the-cloud-transport",
+		To:          []string{"andy@andyfusniak.com"},
+		Subject:     "My test subject line",
 		TemplateParams: map[string]string{
 			"firstname": "Andy",
 		},

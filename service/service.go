@@ -24,18 +24,16 @@ import (
 
 type Service struct {
 	store         store.Repository
-	transport     email.Sender
 	encryptionKey []byte
 }
 
-// NewEmailService creates a new service with the specified store, sender and
+// NewEmailService creates a new service with the specified store and
 // encryption key encKey. The encryption key is used to encrypt and decrypt
 // sensitive data such as passwords. It must be 16 bytes in length (128 bits).
 // NewEmailService is hard-coded to use AES-GCM with a random nonce.
-func NewEmailService(store store.Repository, transport email.Sender, encKey []byte) *Service {
+func NewEmailService(store store.Repository, encKey []byte) *Service {
 	return &Service{
 		store:         store,
-		transport:     transport,
 		encryptionKey: encKey,
 	}
 }
@@ -95,7 +93,8 @@ func (s *Service) CreateSMTPTransport(ctx context.Context, params entity.CreateS
 		EncryptedPassword: encryptedPassword,
 		Username:          params.Username,
 		EmailFrom:         params.EmailFrom,
-		EmailReplyTo:      params.EmailReplyTo,
+		EmailFromName:     params.EmailFromName,
+		EmailReplyTo:      store.JSONArray(params.EmailReplyTo),
 	})
 	if err != nil {
 		return nil, errors.Wrapf(err, "[service] store.InsertSMTPTransport failed")
@@ -103,18 +102,27 @@ func (s *Service) CreateSMTPTransport(ctx context.Context, params entity.CreateS
 	return smtpTransportFromStoreObject(obj), nil
 }
 
+func (s *Service) GetSMTPTransport(ctx context.Context, transportID, projectID string) (*entity.SMTPTransport, error) {
+	obj, err := s.store.GetSMTPTransport(ctx, transportID, projectID)
+	if err != nil {
+		return nil, errors.Wrapf(err, "[service] store.GetSMTPTransport failed")
+	}
+	return smtpTransportFromStoreObject(obj), nil
+}
+
 func smtpTransportFromStoreObject(obj *store.SMTPTransport) *entity.SMTPTransport {
 	return &entity.SMTPTransport{
-		ID:           obj.SMTPTransportID,
-		ProjectID:    obj.ProjectID,
-		Name:         obj.TransportName,
-		Host:         obj.Host,
-		Port:         obj.Port,
-		Username:     obj.Username,
-		EmailFrom:    obj.EmailFrom,
-		EmailReplyTo: obj.EmailReplyTo,
-		CreatedAt:    entity.ISOTime(obj.CreatedAt),
-		ModifiedAt:   entity.ISOTime(obj.ModifiedAt),
+		ID:            obj.SMTPTransportID,
+		ProjectID:     obj.ProjectID,
+		Name:          obj.TransportName,
+		Host:          obj.Host,
+		Port:          obj.Port,
+		Username:      obj.Username,
+		EmailFrom:     obj.EmailFrom,
+		EmailFromName: obj.EmailFromName,
+		EmailReplyTo:  obj.EmailReplyTo,
+		CreatedAt:     entity.ISOTime(obj.CreatedAt),
+		ModifiedAt:    entity.ISOTime(obj.ModifiedAt),
 	}
 }
 
@@ -314,7 +322,32 @@ func (s *Service) SendEmail(ctx context.Context, params entity.SendEmailParams) 
 		return errors.Wrapf(err, "[service] html tmpl.ExecuteTemplate failed")
 	}
 
-	return s.transport.SendEmail(email.EmailParams{
+	trObj, err := s.store.GetSMTPTransport(ctx, params.TransportID, params.ProjectID)
+	if err != nil {
+		return errors.Wrapf(err, "[service] store.GetSMTPTransport failed")
+	}
+
+	// decrypt the password
+	mgr, err := secrets.New(secrets.AESGCMWithRandomNonce, s.encryptionKey)
+	if err != nil {
+		return err
+	}
+	pwPlaintext, err := mgr.HexDecodeDecrypt(trObj.EncryptedPassword[:24], trObj.EncryptedPassword[24:])
+	if err != nil {
+		return err
+	}
+
+	awsTransport := email.NewAWSSMTPTransport(email.AWSConfig{
+		Host:     trObj.Host,
+		Port:     trObj.Port,
+		Username: trObj.Username,
+		Password: pwPlaintext,
+		From:     trObj.EmailFrom,
+		FromName: trObj.EmailFromName,
+		ReplyTo:  trObj.EmailReplyTo,
+	})
+
+	return awsTransport.SendEmail(email.EmailParams{
 		Subject: params.Subject,
 		Text:    txt.String(),
 		HTML:    html.String(),

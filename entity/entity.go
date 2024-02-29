@@ -28,29 +28,31 @@ type Project struct {
 
 // SMTPTransport represents an individual transport based on
 type SMTPTransport struct {
-	ID           string
-	ProjectID    string
-	Name         string
-	Host         string
-	Port         int
-	Username     string
-	EmailFrom    string
-	EmailReplyTo string
-	CreatedAt    ISOTime
-	ModifiedAt   ISOTime
+	ID            string
+	ProjectID     string
+	Name          string
+	Host          string
+	Port          int
+	Username      string
+	EmailFrom     string
+	EmailFromName string
+	EmailReplyTo  []string
+	CreatedAt     ISOTime
+	ModifiedAt    ISOTime
 }
 
 // CreateSMTPTransport is the input parameters for the CreateSMTPTransport method.
 type CreateSMTPTransport struct {
-	ID           string
-	ProjectID    string
-	Name         string
-	Host         string
-	Port         int
-	Username     string
-	Password     string
-	EmailFrom    string
-	EmailReplyTo string
+	ID            string
+	ProjectID     string
+	Name          string
+	Host          string
+	Port          int
+	Username      string
+	Password      string
+	EmailFrom     string
+	EmailFromName string
+	EmailReplyTo  []string
 }
 
 //
@@ -111,6 +113,7 @@ type CreateTemplateFromFiles struct {
 type SendEmailParams struct {
 	TemplateID     string
 	ProjectID      string
+	TransportID    string
 	To             []string
 	Subject        string
 	TemplateParams map[string]string

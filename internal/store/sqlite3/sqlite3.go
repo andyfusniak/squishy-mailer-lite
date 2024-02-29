@@ -96,7 +96,11 @@ returning
 // InsertSMTPTransport inserts a new SMTP transport into the store.
 func (q *Queries) InsertSMTPTransport(ctx context.Context, params store.AddSMTPTransport) (*store.SMTPTransport, error) {
 	const query = `
-insert into smtp_transports as t (smtp_transport_id, project_id, transport_name, host, port, username, encrypted_password, email_from, email_replyto, created_at, modified_at)
+insert into smtp_transports as t (
+  smtp_transport_id, project_id, transport_name, host, port, username,
+  encrypted_password, email_from, email_from_name, email_replyto,
+  created_at, modified_at
+)
 select
   :smtp_transport_id as smtp_transport_id,
   p.project_id as project_id,
@@ -106,13 +110,16 @@ select
   :username as username,
   :encrypted_password as encrypted_password,
   :email_from as email_from,
+  :email_from_name as email_from_name,
   :email_replyto as email_replyto,
   :created_at as created_at,
   :modified_at as modified_at
 from projects as p
 where p.project_id = :project_id
 returning
-  smtp_transport_id, project_id, transport_name, host, port, username, encrypted_password, email_from, email_replyto, created_at, modified_at
+  smtp_transport_id, project_id, transport_name, host, port, username,
+  encrypted_password, email_from, email_from_name, email_replyto,
+  created_at, modified_at
 `
 	var r store.SMTPTransport
 	now := store.Datetime(time.Now().UTC())
@@ -124,6 +131,7 @@ returning
 		sql.Named("username", params.Username),
 		sql.Named("encrypted_password", params.EncryptedPassword),
 		sql.Named("email_from", params.EmailFrom),
+		sql.Named("email_from_name", params.EmailFromName),
 		sql.Named("email_replyto", params.EmailReplyTo),
 		sql.Named("created_at", &now),
 		sql.Named("modified_at", &now),
@@ -137,6 +145,7 @@ returning
 		&r.Username,
 		&r.EncryptedPassword,
 		&r.EmailFrom,
+		&r.EmailFromName,
 		&r.EmailReplyTo,
 		&r.CreatedAt,
 		&r.ModifiedAt,
@@ -144,6 +153,64 @@ returning
 		return nil, errors.Wrapf(err,
 			"[sqlite3:smtp_transports] query row scan failed query=%q", query)
 	}
+	return &r, nil
+}
+
+// GetSMTPTransport gets a SMTP transport from the store by composite primary
+// key (transportID, projectID).
+func (q *Queries) GetSMTPTransport(ctx context.Context, transportID, projectID string) (*store.SMTPTransport, error) {
+	const query = `
+select
+  coalesce(t.smtp_transport_id, '') as smtp_transport_id,
+  p.project_id,
+  coalesce(t.transport_name, '') as transport_name,
+  coalesce(t.host, '') as host,
+  coalesce(t.port, 0) as port,
+  coalesce(t.username, '') as username,
+  coalesce(t.encrypted_password, '') as encrypted_password,
+  coalesce(t.email_from, '') as email_from,
+  coalesce(t.email_from_name, '') as email_from_name,
+  coalesce(t.email_replyto, '') as email_replyto,
+  coalesce(t.created_at, '1970-01-01T00:00:00.000000Z') as created_at,
+  coalesce(t.modified_at, '1970-01-01T00:00:00.000000Z') as modified_at
+from projects as p
+left outer join smtp_transports as t
+  on p.project_id = t.project_id and t.smtp_transport_id = :smtp_transport_id
+where
+  p.project_id = :project_id
+`
+
+	var r store.SMTPTransport
+	if err := q.readonly.QueryRowContext(ctx, query,
+		sql.Named("project_id", projectID),
+		sql.Named("smtp_transport_id", transportID),
+	).Scan(
+		&r.SMTPTransportID,
+		&r.ProjectID,
+		&r.TransportName,
+		&r.Host,
+		&r.Port,
+		&r.Username,
+		&r.EncryptedPassword,
+		&r.EmailFrom,
+		&r.EmailFromName,
+		&r.EmailReplyTo,
+		&r.CreatedAt,
+		&r.ModifiedAt,
+	); err != nil {
+		// if there are no rows returned, then the project does not exist
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, store.ErrProjectNotFound
+		}
+
+		return nil, errors.Wrapf(err,
+			"[sqlite3:smtp_transports] query row scan failed query=%q", query)
+	}
+
+	if r.SMTPTransportID == "" {
+		return nil, store.ErrTransportNotFound
+	}
+
 	return &r, nil
 }
 

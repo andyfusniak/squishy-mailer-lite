@@ -15,6 +15,7 @@ type EmailParams struct {
 
 	// From optional override for default sender
 	From string
+	ReplyTo string
 
 	// To, Cc, Bcc are the recipients of the email
 	To  []string

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"time"
 )
@@ -50,6 +51,7 @@ const RFC3339Micro = "2006-01-02T15:04:05.000000Z07:00" // .000000Z = keep trail
 // Datetime is a custom type for time.Time that can be scanned from the database.
 type Datetime time.Time
 
+// Scan parses a time from the database into a Datetime.
 func (t *Datetime) Scan(v any) error {
 	vt, err := time.Parse(RFC3339Micro, v.(string))
 	if err != nil {
@@ -59,17 +61,46 @@ func (t *Datetime) Scan(v any) error {
 	return nil
 }
 
+// Value returns the time in the format expected by the database.
 func (t *Datetime) Value() (driver.Value, error) {
 	return time.Time(*t).UTC().Format(RFC3339Micro), nil
+}
+
+type JSONArray []string
+
+// Scan unmarshals a JSON array into a JSONArray.
+func (a *JSONArray) Scan(v any) error {
+	// unmarshal the JSON array
+	var arr []string
+	if err := json.Unmarshal([]byte(v.(string)), &arr); err != nil {
+		return err
+	}
+	*a = arr
+	return nil
+}
+
+// Value returns the JSON array as a string.
+func (a JSONArray) Value() (driver.Value, error) {
+	v, err := json.Marshal(a)
+	if err != nil {
+		return nil, err
+	}
+	return string(v), nil
 }
 
 //
 // smtp transports
 //
 
+var (
+	// ErrTransportNotFound is returned when an SMTP transport is not found.
+	ErrTransportNotFound = errors.New("transport not found")
+)
+
 type SMTPTransportsRepository interface {
 	// InsertSMTPTransport inserts a new SMTP transport into the store.
 	InsertSMTPTransport(ctx context.Context, params AddSMTPTransport) (*SMTPTransport, error)
+	GetSMTPTransport(ctx context.Context, transportID, projectID string) (*SMTPTransport, error)
 }
 
 // SMTPTransport represents an SMTP transport for a project.
@@ -82,7 +113,8 @@ type SMTPTransport struct {
 	Username          string
 	EncryptedPassword string
 	EmailFrom         string
-	EmailReplyTo      string
+	EmailFromName     string
+	EmailReplyTo      JSONArray
 	CreatedAt         Datetime
 	ModifiedAt        Datetime
 }
@@ -97,7 +129,8 @@ type AddSMTPTransport struct {
 	Username          string
 	EncryptedPassword string
 	EmailFrom         string
-	EmailReplyTo      string
+	EmailFromName     string
+	EmailReplyTo      JSONArray
 	CreatedAt         Datetime
 	ModifiedAt        Datetime
 }

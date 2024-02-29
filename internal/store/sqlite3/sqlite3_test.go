@@ -99,7 +99,8 @@ func TestInsertSMTPTransport(t *testing.T) {
 		Username:          "someuser",
 		EncryptedPassword: "encryptedpassword",
 		EmailFrom:         "from@examplesite.com",
-		EmailReplyTo:      "reply-to@examplesite.com",
+		EmailFromName:     "Example Site",
+		EmailReplyTo:      store.JSONArray{"reply-to@examplesite.com"},
 	})
 	if err != nil {
 		t.Fatalf("expected err to be non-nil: %+v", err)
@@ -112,7 +113,8 @@ func TestInsertSMTPTransport(t *testing.T) {
 	assert.Equal(t, "someuser", obj.Username)
 	assert.Equal(t, "encryptedpassword", obj.EncryptedPassword)
 	assert.Equal(t, "from@examplesite.com", obj.EmailFrom)
-	assert.Equal(t, "reply-to@examplesite.com", obj.EmailReplyTo)
+	assert.Equal(t, "Example Site", obj.EmailFromName)
+	assert.Equal(t, store.JSONArray{"reply-to@examplesite.com"}, obj.EmailReplyTo)
 	assert.WithinDuration(t, time.Now(), time.Time(obj.CreatedAt), 1*time.Millisecond)
 	assert.WithinDuration(t, time.Now(), time.Time(obj.ModifiedAt), 1*time.Millisecond)
 }

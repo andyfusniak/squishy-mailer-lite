@@ -25,6 +25,7 @@ create table if not exists smtp_transports (
   username             text not null,
   encrypted_password   text not null,
   email_from           text not null,
+  email_from_name      text not null,
   email_replyto        text not null,
   created_at           text not null,
   modified_at          text not null,
