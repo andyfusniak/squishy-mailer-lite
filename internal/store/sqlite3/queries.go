@@ -10,13 +10,19 @@ type DBTx interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-	Close() error
 }
 
 // Queries allows single and transactional queries.
 type Queries struct {
 	readwrite DBTx
 	readonly  DBTx
+}
+
+// WithTx wraps the query in a transaction.
+func (q *Queries) withTx(tx *sql.Tx) *Queries {
+	return &Queries{
+		readwrite: tx,
+	}
 }
 
 // NewQueries create a new comments query.

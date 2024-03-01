@@ -152,6 +152,17 @@ type CreateTemplateFromFiles struct {
 	HTMLFilenames []string
 }
 
+// SetTemplateParams is the input parameters for the SetTemplateParams method.
+type SetTemplateParams struct {
+	ID         string
+	ProjectID  string
+	GroupID    string
+	Text       string
+	TextDigest string
+	HTML       string
+	HTMLDigest string
+}
+
 //
 // send email
 //

@@ -16,25 +16,49 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Store memberships store.
+// Store provides all functions to execute database queries and transactions.
 type Store struct {
 	*Queries
+	readwrite *sql.DB
 }
 
 // NewStore returns a new store.
 func NewStore(ro, rw *sql.DB) *Store {
 	return &Store{
-		Queries: NewQueries(ro, rw),
+		Queries:   NewQueries(ro, rw),
+		readwrite: rw,
 	}
 }
 
+func (s *Store) execTx(ctx context.Context, fn func(*Queries) error) error {
+	tx, err := s.readwrite.BeginTx(ctx, &sql.TxOptions{
+		Isolation: sql.LevelSerializable,
+	})
+	if err != nil {
+		return err
+	}
+	q := s.withTx(tx)
+	if err = fn(q); err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return fmt.Errorf("[postgres] tx rollback failed: %v: %v", err, rbErr)
+		}
+		return err
+	}
+	return tx.Commit()
+}
+
 // Close the store.
-func (s *Store) Close() error {
+func (q *Queries) Close() error {
 	var isReadOnlyErr, isReadWriteErr bool
-	if err := s.readwrite.Close(); err != nil {
+
+	// convert the interface to its underlying type and check for errors
+	rw := q.readwrite.(*sql.DB)
+	if err := rw.Close(); err != nil {
 		isReadWriteErr = true
 	}
-	if err := s.readonly.Close(); err != nil {
+
+	ro := q.readonly.(*sql.DB)
+	if err := ro.Close(); err != nil {
 		isReadWriteErr = true
 	}
 
@@ -408,6 +432,171 @@ returning
 	return &r, nil
 }
 
+// SetTemplate sets a template in the store. If the template does not exist
+// it will be created. If the template does exist and the digests are the same
+// as the ones provided by the caller, then the template will not be updated.
+// If the digests are different, then the template will be updated.
+func (s *Store) SetTemplate(ctx context.Context, params store.SetTemplateParams) (*store.Template, error) {
+	const chkDigestQuery = `
+select
+  coalesce(t.template_id, '') as template_id,
+  coalesce(t.group_id, '') as group_id,
+  p.project_id,
+  coalesce(txt_digest == :txt_digest, FALSE) as txt_digest_eq,
+  coalesce(html_digest == :html_digest, FALSE) as html_digest_eq,
+  coalesce(t.created_at, '1970-01-01T00:00:00.000000Z') as created_at,
+  coalesce(t.modified_at, '1970-01-01T00:00:00.000000Z') as modified_at
+from projects as p
+left outer join templates as t
+  on p.project_id = t.project_id and t.template_id = :template_id
+where
+  p.project_id = :project_id
+`
+	var r *store.Template
+	if err := s.execTx(ctx, func(q *Queries) error {
+		// 1. get the txt and html digest for the template
+		// if no rows are returned then the project does not exist
+		// if one row is returned and the template id is empty
+		// then the template does not exist
+		// otherwise txt_digest_eq and html_digest_eq will indicate
+		// if the digests are equal to the ones provided by the caller
+		//
+		// only use the q.readwrite connection for this query
+		// because the readonly query will not see the uncommitted
+		// changes made by the insert query
+		var templateID, groupID, projectID string
+		var txtDigestEq, htmlDigestEq bool
+		var createdAt, modifiedAt store.Datetime
+		if err := q.readwrite.QueryRowContext(ctx, chkDigestQuery,
+			sql.Named("txt_digest", params.TxtDigest),
+			sql.Named("html_digest", params.HTMLDigest),
+			sql.Named("project_id", params.ProjectID),
+			sql.Named("template_id", params.TemplateID),
+		).Scan(
+			&templateID,
+			&groupID,
+			&projectID,
+			&txtDigestEq,
+			&htmlDigestEq,
+			&createdAt,
+			&modifiedAt,
+		); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return store.NewStoreError(store.ErrProjectNotFound, err)
+			}
+			return errors.Wrapf(err,
+				"[sqlite3:templates] query row scan failed query=%q", chkDigestQuery)
+		}
+
+		if templateID == "" {
+			// the template does not exist
+			// 2. create a new template
+			var err error
+			r, err = q.InsertTemplate(ctx, store.AddTemplate{
+				TemplateID: params.TemplateID,
+				GroupID:    params.GroupID,
+				ProjectID:  params.ProjectID,
+				Txt:        params.Txt,
+				TxtDigest:  params.TxtDigest,
+				HTML:       params.HTML,
+				HTMLDigest: params.HTMLDigest,
+				CreatedAt:  store.Datetime(time.Now().UTC()),
+				ModifiedAt: store.Datetime(time.Now().UTC()),
+			})
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}
+
+		// 2. the template exists and the digests are the same so there is no
+		// need to update the template (or 3 below)
+		if txtDigestEq && htmlDigestEq {
+			r = &store.Template{
+				TemplateID: params.TemplateID,
+				GroupID:    groupID,
+				ProjectID:  params.ProjectID,
+				Txt:        params.Txt,
+				TxtDigest:  params.TxtDigest,
+				HTML:       params.HTML,
+				HTMLDigest: params.HTMLDigest,
+				CreatedAt:  createdAt,
+				ModifiedAt: modifiedAt,
+			}
+			return nil
+		}
+
+		// 3. the digests differ so update the template
+		var err error
+		r, err = q.updateTemplate(ctx, updateTemplateParams{
+			projectID:  params.ProjectID,
+			templateID: params.TemplateID,
+			txt:        params.Txt,
+			txtDigest:  params.TxtDigest,
+			html:       params.HTML,
+			htmlDigest: params.HTMLDigest,
+		})
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return r, nil
+}
+
+type updateTemplateParams struct {
+	projectID  string
+	templateID string
+	txt        string
+	txtDigest  string
+	html       string
+	htmlDigest string
+}
+
+func (q *Queries) updateTemplate(ctx context.Context, params updateTemplateParams) (*store.Template, error) {
+	const query = `
+update templates
+set
+  txt = :txt, txt_digest = :txt_digest,
+  html = :html, html_digest = :html_digest,
+  modified_at = :modified_at
+where
+  template_id = :template_id and project_id = :project_id
+returning
+  template_id, group_id, project_id, txt, txt_digest, html, html_digest, created_at, modified_at
+`
+	var r store.Template
+	now := store.Datetime(time.Now().UTC())
+	if err := q.readwrite.QueryRowContext(ctx, query,
+		sql.Named("txt", params.txt),
+		sql.Named("txt_digest", params.txtDigest),
+		sql.Named("html", params.html),
+		sql.Named("html_digest", params.htmlDigest),
+		sql.Named("modified_at", &now),
+		sql.Named("template_id", params.templateID),
+		sql.Named("project_id", params.projectID),
+	).Scan(
+		&r.TemplateID,
+		&r.GroupID,
+		&r.ProjectID,
+		&r.Txt,
+		&r.TxtDigest,
+		&r.HTML,
+		&r.HTMLDigest,
+		&r.CreatedAt,
+		&r.ModifiedAt,
+	); err != nil {
+		return nil, errors.Wrapf(err,
+			"[sqlite3:templates] query row scan failed query=%q", query)
+	}
+	return &r, nil
+}
+
 // GetTemplate gets a template from the store by projectID and templateID.
 // Templates are unique within a project. If the project is not found, an
 // error of type store.ErrProjectNotFound is returned. If the template is
@@ -451,7 +640,7 @@ where
 	}
 
 	if r.TemplateID == "" {
-		return nil, store.ErrTemplateNotFound
+		return nil, store.NewStoreError(store.ErrTemplateNotFound, nil)
 	}
 
 	return &r, nil

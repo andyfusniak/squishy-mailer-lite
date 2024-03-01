@@ -26,6 +26,7 @@ const (
 	ErrProjectAlreadyExists = "project_already_exists"
 	ErrProjectNotFound      = "project_not_found"
 	ErrGroupNotFound        = "group_not_found"
+	ErrTemplateNotFound     = "template_not_found"
 )
 
 // ErrCode is a custom type for error codes.
@@ -35,6 +36,7 @@ var mapErrCodeToMessage = map[ErrCode]string{
 	ErrProjectAlreadyExists: "project already exists",
 	ErrProjectNotFound:      "project not found",
 	ErrGroupNotFound:        "group not found",
+	ErrTemplateNotFound:     "template not found",
 }
 
 // ServiceError is a custom error type.
@@ -208,14 +210,13 @@ type AddGroup struct {
 // templates
 //
 
-var (
-	// ErrTemplateNotFound is returned when a template is not found.
-	ErrTemplateNotFound = errors.New("template not found")
-)
-
 type TemplatesRepository interface {
 	// InsertTemplate inserts a new template into the store
 	InsertTemplate(ctx context.Context, params AddTemplate) (*Template, error)
+
+	// SetTemplate sets a template in the store. If the template does not exist, it is created.
+	// If the template exists, it is updated if the digests do not match.
+	SetTemplate(ctx context.Context, params SetTemplateParams) (*Template, error)
 
 	// GetTemplate gets a template from the store.
 	GetTemplate(ctx context.Context, projectID, templateID string) (*Template, error)
@@ -245,4 +246,24 @@ type AddTemplate struct {
 	HTMLDigest string
 	CreatedAt  Datetime
 	ModifiedAt Datetime
+}
+
+// SetTemplateParams is the input parameters for the SetTemplateParams method.
+type SetTemplateParams struct {
+	TemplateID string
+	GroupID    string
+	ProjectID  string
+	Txt        string
+	TxtDigest  string
+	HTML       string
+	HTMLDigest string
+	CreatedAt  Datetime
+	ModifiedAt Datetime
+}
+
+// TemplateDigest is a digest of a template.
+type TemplateDigest struct {
+	TemplateID string
+	TxtDigest  string
+	HTMLDigest string
 }

@@ -420,9 +420,15 @@ func TestGetTemplate(t *testing.T) {
 
 	// get non-existent template from project p1
 	obj, err = st.GetTemplate(ctx, p1.ProjectID, "non-existent-template")
-	if err != store.ErrTemplateNotFound {
-		t.Fatalf("expected err to be store.ErrTemplateNotFound: %+v", err)
+	var storeErr *store.Error
+	if errors.As(err, &storeErr) {
+		if err.(*store.Error).Code != store.ErrTemplateNotFound {
+			t.Fatalf("expected err to be store.ErrTemplateNotFound: %+v", err)
+		}
+	} else {
+		t.Fatalf("expected err to be of type *store.Error")
 	}
+
 	assert.Nil(t, obj, "expected obj to be nil")
 
 	// get template tmpl1 from non-existent project

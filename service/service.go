@@ -128,7 +128,7 @@ func NewEmailService(opts ...Option) (*Service, error) {
 		if err != nil {
 			return nil, errors.Wrapf(err, "[service] defaultSqlite3DBs failed")
 		}
-		s.store = sqlite3.NewStore(rw, ro)
+		s.store = sqlite3.NewStore(ro, rw)
 	}
 
 	// if no encryption key was specified we cannot continue
@@ -157,7 +157,7 @@ const (
 	defaultDBFilepath   string = "mailer.db"
 )
 
-func defaultSqlite3DBs(dbfilepath string) (rw, ro *sql.DB, err error) {
+func defaultSqlite3DBs(dbfilepath string) (ro, rw *sql.DB, err error) {
 	// if no database file path was specified use the default
 	if dbfilepath == "" {
 		dbfilepath = defaultDBFilepath
@@ -171,14 +171,6 @@ func defaultSqlite3DBs(dbfilepath string) (rw, ro *sql.DB, err error) {
 
 	// set up two database connections; one read-only with high concurrency
 	// and one read-write for non-concurrent queries
-	rw, err = sqlite3.OpenDB(dbfilepath)
-	if err != nil {
-		return nil, nil, err
-	}
-	rw.SetMaxOpenConns(1)
-	rw.SetMaxIdleConns(1)
-	rw.SetConnMaxIdleTime(5 * time.Minute)
-
 	ro, err = sqlite3.OpenDB(dbfilepath)
 	if err != nil {
 		return nil, nil, err
@@ -187,6 +179,14 @@ func defaultSqlite3DBs(dbfilepath string) (rw, ro *sql.DB, err error) {
 	ro.SetMaxIdleConns(defaultMaxIdleConns)
 	ro.SetConnMaxIdleTime(5 * time.Minute)
 
+	rw, err = sqlite3.OpenDB(dbfilepath)
+	if err != nil {
+		return nil, nil, err
+	}
+	rw.SetMaxOpenConns(1)
+	rw.SetMaxIdleConns(1)
+	rw.SetConnMaxIdleTime(5 * time.Minute)
+
 	// if the database file did not exist, create the schema
 	if shouldCreateDB {
 		if err := sqlite3.CreateSqliteDBSchema(rw); err != nil {
@@ -194,7 +194,7 @@ func defaultSqlite3DBs(dbfilepath string) (rw, ro *sql.DB, err error) {
 		}
 	}
 
-	return rw, ro, nil
+	return ro, rw, nil
 }
 
 //
@@ -372,6 +372,27 @@ func (s *Service) CreateTemplate(ctx context.Context, params entity.CreateTempla
 	return templateFromStoreObject(obj), nil
 }
 
+// the following function makes a template or updates the existing template if the digest has changed
+func (s *Service) SetTemplate(ctx context.Context, params entity.SetTemplateParams) (*entity.Template, error) {
+	now := store.Datetime(time.Now().UTC())
+	tmplObj, err := s.store.SetTemplate(ctx, store.SetTemplateParams{
+		TemplateID: params.ID,
+		GroupID:    params.GroupID,
+		ProjectID:  params.ProjectID,
+		Txt:        params.Text,
+		TxtDigest:  params.TextDigest,
+		HTML:       params.HTML,
+		HTMLDigest: params.HTMLDigest,
+		CreatedAt:  now,
+		ModifiedAt: now,
+	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "[service] store.SetTemplate failed")
+	}
+
+	return templateFromStoreObject(tmplObj), nil
+}
+
 func templateFromStoreObject(obj *store.Template) *entity.Template {
 	return &entity.Template{
 		ID:         obj.TemplateID,
@@ -437,6 +458,53 @@ func amalgalateTemplates(filenames []string) ([]byte, error) {
 	}
 
 	return buf.Bytes(), nil
+}
+
+// SetTemplateFromFiles creates a new template from the specified files.
+// If the template already exists it will be updated with the new content
+// if the content has changed. A template is uniquely identified by its
+// template id and project id.
+func (s *Service) SetTemplateFromFiles(ctx context.Context, params entity.CreateTemplateFromFiles) (*entity.Template, error) {
+	// txt templates
+	if err := checkTemplates(txtTemplate, params.TxtFilenames...); err != nil {
+		return nil, errors.Wrapf(err, "[service] checkTemplates txt failed")
+	}
+	// amalgalate the txt templates into a single string
+	txt, err := amalgalateTemplates(params.TxtFilenames)
+	if err != nil {
+		return nil, errors.Wrapf(err, "[service] amalgalateTemplates txt failed")
+	}
+
+	// create a SHA512 (224 bit) hash of the text template amalgalated string
+	hash := sha512.New512_224()
+	hash.Write(txt)
+	sum := hash.Sum(nil)
+	txtCS := hex.EncodeToString(sum[0:16])
+
+	// html templates
+	if err := checkTemplates(htmlTemplate, params.HTMLFilenames...); err != nil {
+		return nil, errors.Wrapf(err, "[service] checkTemplates html failed")
+	}
+	// amalgalate the html templates into a single string
+	html, err := amalgalateTemplates(params.HTMLFilenames)
+	if err != nil {
+		return nil, errors.Wrapf(err, "[service] amalgalateTemplates html failed")
+	}
+	// create a SHA512 (224 bit) hash of the html template amalgalated string
+	hash = sha512.New512_224()
+	hash.Write(html)
+	sum = hash.Sum(nil)
+	htmlCS := hex.EncodeToString(sum[0:16])
+
+	return s.SetTemplate(ctx, entity.SetTemplateParams{
+		ID:         params.ID,
+		ProjectID:  params.ProjectID,
+		GroupID:    params.GroupID,
+		Text:       string(txt),
+		TextDigest: txtCS,
+		HTML:       string(html),
+		HTMLDigest: htmlCS,
+	})
 }
 
 // CreateTemplateFromFiles creates a new template from the specified files.
