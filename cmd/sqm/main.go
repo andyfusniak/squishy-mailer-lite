@@ -48,28 +48,28 @@ func run() error {
 		}
 	}
 
-	// _, err = svc.CreateSMTPTransport(ctx, entity.CreateSMTPTransport{
-	// 	ID:            "the-cloud-transport",
-	// 	ProjectID:     project.ID,
-	// 	Name:          "Squishy Mailer Lite Transport",
-	// 	Host:          "email-smtp.us-east-1.amazonaws.com",
-	// 	Port:          587,
-	// 	Username:      "<username>",
-	// 	Password:      os.Getenv("SQUISHY_MAILER_LITE_SMTP_PASSWORD"),
-	// 	EmailFrom:     "support@ravenmailer.com",
-	// 	EmailFromName: "Raven Mailer Support",
-	// 	EmailReplyTo:  []string{"support@ravenmailer.com"},
-	// })
-	// if err != nil {
-	// 	return err
-	// }
+	_, err = svc.CreateSMTPTransport(ctx, entity.CreateSMTPTransport{
+		ID:            "the-cloud-transport",
+		ProjectID:     project.ID,
+		Name:          "Squishy Mailer Lite Transport",
+		Host:          "email-smtp.us-east-1.amazonaws.com",
+		Port:          587,
+		Username:      "<username>",
+		Password:      os.Getenv("SQUISHY_MAILER_LITE_SMTP_PASSWORD"),
+		EmailFrom:     "support@ravenmailer.com",
+		EmailFromName: "Raven Mailer Support",
+		EmailReplyTo:  []string{"support@ravenmailer.com"},
+	})
+	if err != nil {
+		return err
+	}
 
-	// group, err := svc.CreateGroup(ctx, "g1", project.ID, "Group One")
-	// if err != nil {
-	// 	return err
-	// }
+	group, err := svc.CreateGroup(ctx, "g1", project.ID, "Group One")
+	if err != nil {
+		return err
+	}
 
-	// template, err := svc.CreateTemplate(ctx, entity.CreateTemplate{
+	// _, err = svc.CreateTemplate(ctx, entity.CreateTemplate{
 	// 	ID:        "t1",
 	// 	ProjectID: project.ID,
 	// 	GroupID:   group.ID,
@@ -80,10 +80,10 @@ func run() error {
 	// 	return err
 	// }
 
-	template, err := svc.SetTemplateFromFiles(ctx, entity.CreateTemplateFromFiles{
+	_, err = svc.SetTemplateFromFiles(ctx, entity.CreateTemplateFromFiles{
 		ID:        "t1",
 		ProjectID: project.ID,
-		GroupID:   "g1",
+		GroupID:   group.ID,
 		HTMLFilenames: []string{
 			"./service/testdata/email/templates/layout.html",
 			"./service/testdata/email/templates/welcome.html",
@@ -98,8 +98,8 @@ func run() error {
 	}
 
 	// send a test email
-	if err := svc.SendEmail(ctx, entity.SendEmailParams{
-		TemplateID:  template.ID,
+	mq, err := svc.SendEmailAsync(ctx, entity.SendEmailParams{
+		TemplateID:  "t1",
 		ProjectID:   project.ID,
 		TransportID: "the-cloud-transport",
 		To:          []string{"andy@andyfusniak.com"},
@@ -107,9 +107,14 @@ func run() error {
 		TemplateParams: map[string]string{
 			"firstname": "Andy",
 		},
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
+	fmt.Printf("%#v\n", mq)
+
+	fmt.Printf("%#v\n", mq.Body)
+	fmt.Printf("%#v\n", mq.Metadata)
 
 	return nil
 }

@@ -68,7 +68,7 @@ func TestInsertProject(t *testing.T) {
 
 	// check created and modified timestamps are very close to now
 	// as we can't know the exact time it was created.
-	assert.WithinDuration(t, time.Now(), time.Time(obj.CreatedAt), 1*time.Millisecond)
+	assert.WithinDuration(t, time.Now(), obj.CreatedAt.Time, 1*time.Millisecond)
 }
 
 func TestInsertSMTPTransport(t *testing.T) {
@@ -116,8 +116,8 @@ func TestInsertSMTPTransport(t *testing.T) {
 	assert.Equal(t, "from@examplesite.com", obj.EmailFrom)
 	assert.Equal(t, "Example Site", obj.EmailFromName)
 	assert.Equal(t, store.JSONArray{"reply-to@examplesite.com"}, obj.EmailReplyTo)
-	assert.WithinDuration(t, time.Now(), time.Time(obj.CreatedAt), 1*time.Millisecond)
-	assert.WithinDuration(t, time.Now(), time.Time(obj.ModifiedAt), 1*time.Millisecond)
+	assert.WithinDuration(t, time.Now(), obj.CreatedAt.Time, 1*time.Millisecond)
+	assert.WithinDuration(t, time.Now(), obj.ModifiedAt.Time, 1*time.Millisecond)
 }
 
 func TestInsertGroupIntoNonExistingProject(t *testing.T) {
@@ -185,8 +185,8 @@ func TestInsertGroup(t *testing.T) {
 	assert.Equal(t, "test-group-1", obj.GroupID)
 	assert.Equal(t, projectObj.ProjectID, obj.ProjectID)
 	assert.Equal(t, "Test Group One", obj.GroupName)
-	assert.WithinDuration(t, time.Now(), time.Time(obj.CreatedAt), 1*time.Millisecond)
-	assert.WithinDuration(t, time.Now(), time.Time(obj.ModifiedAt), 1*time.Millisecond)
+	assert.WithinDuration(t, time.Now(), obj.CreatedAt.Time, 1*time.Millisecond)
+	assert.WithinDuration(t, time.Now(), obj.ModifiedAt.Time, 1*time.Millisecond)
 }
 
 func TestGetGroup(t *testing.T) {
@@ -225,8 +225,8 @@ func TestGetGroup(t *testing.T) {
 	assert.Equal(t, "g1", obj.GroupID)
 	assert.Equal(t, p1.ProjectID, obj.ProjectID)
 	assert.Equal(t, "Group One", obj.GroupName)
-	assert.Equal(t, time.Time(g1.CreatedAt), time.Time(obj.CreatedAt))
-	assert.Equal(t, time.Time(g1.ModifiedAt), time.Time(obj.ModifiedAt))
+	assert.Equal(t, g1.CreatedAt, obj.CreatedAt)
+	assert.Equal(t, g1.ModifiedAt, obj.ModifiedAt)
 }
 
 func TestNonExistentGroupInProject(t *testing.T) {
@@ -360,8 +360,8 @@ func TestInsertTemplate(t *testing.T) {
 	assert.Equal(t, obj.ProjectID, projectObj.ProjectID)
 	assert.Equal(t, "Test Text", obj.Txt)
 	assert.Equal(t, "<h1>Test HTML</h1>", obj.HTML)
-	assert.WithinDuration(t, time.Now(), time.Time(obj.CreatedAt), 1*time.Millisecond)
-	assert.WithinDuration(t, time.Now(), time.Time(obj.ModifiedAt), 1*time.Millisecond)
+	assert.WithinDuration(t, time.Now(), obj.CreatedAt.Time, 1*time.Millisecond)
+	assert.WithinDuration(t, time.Now(), obj.ModifiedAt.Time, 1*time.Millisecond)
 }
 
 func TestGetTemplate(t *testing.T) {
@@ -415,8 +415,8 @@ func TestGetTemplate(t *testing.T) {
 	assert.Equal(t, p1.ProjectID, obj.ProjectID)
 	assert.Equal(t, "Test Text", obj.Txt)
 	assert.Equal(t, "<h1>Test HTML</h1>", obj.HTML)
-	assert.Equal(t, time.Time(t1.CreatedAt), time.Time(obj.CreatedAt))
-	assert.Equal(t, time.Time(t1.ModifiedAt), time.Time(obj.ModifiedAt))
+	assert.Equal(t, t1.CreatedAt, obj.CreatedAt)
+	assert.Equal(t, t1.ModifiedAt, obj.ModifiedAt)
 
 	// get non-existent template from project p1
 	obj, err = st.GetTemplate(ctx, p1.ProjectID, "non-existent-template")

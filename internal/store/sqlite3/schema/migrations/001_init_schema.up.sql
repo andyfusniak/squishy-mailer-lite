@@ -68,4 +68,29 @@ create table if not exists templates (
     references groups (group_id, project_id)
 );
 
+
+-- the mailqueue table is used to queue emails to be sent
+-- the email_to is a json array. The body and metadata
+-- fields are JSON strings.
+create table if not exists mailqueue (
+  mailqueue_id   text not null,
+  project_id     text not null,
+  -- ideas for states: 'queued', 'sending', 'sent', 'failed', 'bounced', 'complained', 'unsubscribed', 'rejected', 'delivered', 'opened', 'clicked', 'dropped', 'spamreport', 'unsubscribe', 'group_unsubscribe', 'group_resubscribe'
+  mstate         text not null default 'queued',
+  subj           text not null,
+  email_from     text not null,
+  email_to       text not null,
+  body           text not null default '',
+  transport      text not null,
+  metadata       text not null check (metadata != ''),
+  created_at     text not null,
+  modified_at    text not null,
+  primary key (mailqueue_id, project_id)
+);
+
+-- the mailqueue table needs to be fast to query for the last few emails
+-- within a project.
+create index if not exists mailqueue_project_id_created_at_index
+  on mailqueue (project_id, created_at desc);
+
 commit;

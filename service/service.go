@@ -37,6 +37,7 @@ import (
 	htmltemplate "html/template"
 	txttemplate "text/template"
 
+	"github.com/andyfusniak/base58"
 	"github.com/andyfusniak/squishy-mailer-lite/entity"
 	"github.com/andyfusniak/squishy-mailer-lite/internal/email"
 	"github.com/andyfusniak/squishy-mailer-lite/internal/secrets"
@@ -242,7 +243,7 @@ func projectFromStoreObject(obj *store.Project) *entity.Project {
 		ID:          obj.ProjectID,
 		Name:        obj.ProjectName,
 		Description: obj.Description,
-		CreatedAt:   entity.ISOTime(obj.CreatedAt),
+		CreatedAt:   entity.ISOTime(obj.CreatedAt.Time),
 	}
 }
 
@@ -310,8 +311,8 @@ func smtpTransportFromStoreObject(obj *store.SMTPTransport) *entity.SMTPTranspor
 		EmailFrom:     obj.EmailFrom,
 		EmailFromName: obj.EmailFromName,
 		EmailReplyTo:  obj.EmailReplyTo,
-		CreatedAt:     entity.ISOTime(obj.CreatedAt),
-		ModifiedAt:    entity.ISOTime(obj.ModifiedAt),
+		CreatedAt:     entity.ISOTime(obj.CreatedAt.Time),
+		ModifiedAt:    entity.ISOTime(obj.ModifiedAt.Time),
 	}
 }
 
@@ -322,7 +323,7 @@ func smtpTransportFromStoreObject(obj *store.SMTPTransport) *entity.SMTPTranspor
 // CreateGroup creates a new group. A group is a collection of templates.
 // Group id's are unique within a project. A project can have many groups.
 func (s *Service) CreateGroup(ctx context.Context, id, projectID, name string) (*entity.Group, error) {
-	now := store.Datetime(time.Now().UTC())
+	now := store.Datetime{Time: time.Now().UTC()}
 	obj, err := s.store.InsertGroup(ctx, store.AddGroup{
 		GroupID:    id,
 		ProjectID:  projectID,
@@ -341,8 +342,8 @@ func groupFromStoreObject(obj *store.Group) *entity.Group {
 		ID:         obj.GroupID,
 		ProjectID:  obj.ProjectID,
 		Name:       obj.GroupName,
-		CreatedAt:  entity.ISOTime(obj.CreatedAt),
-		ModifiedAt: entity.ISOTime(obj.ModifiedAt),
+		CreatedAt:  entity.ISOTime(obj.CreatedAt.Time),
+		ModifiedAt: entity.ISOTime(obj.ModifiedAt.Time),
 	}
 }
 
@@ -354,7 +355,7 @@ func groupFromStoreObject(obj *store.Group) *entity.Group {
 // Template id's are unique within a project. A project can have many templates.
 // A template belongs to a group. A group can have many templates.
 func (s *Service) CreateTemplate(ctx context.Context, params entity.CreateTemplate) (*entity.Template, error) {
-	now := store.Datetime(time.Now().UTC())
+	now := store.Datetime{Time: time.Now().UTC()}
 	obj, err := s.store.InsertTemplate(ctx, store.AddTemplate{
 		TemplateID: params.ID,
 		ProjectID:  params.ProjectID,
@@ -374,7 +375,7 @@ func (s *Service) CreateTemplate(ctx context.Context, params entity.CreateTempla
 
 // the following function makes a template or updates the existing template if the digest has changed
 func (s *Service) SetTemplate(ctx context.Context, params entity.SetTemplateParams) (*entity.Template, error) {
-	now := store.Datetime(time.Now().UTC())
+	now := store.Datetime{Time: time.Now().UTC()}
 	tmplObj, err := s.store.SetTemplate(ctx, store.SetTemplateParams{
 		TemplateID: params.ID,
 		GroupID:    params.GroupID,
@@ -402,8 +403,8 @@ func templateFromStoreObject(obj *store.Template) *entity.Template {
 		TextDigest: obj.TxtDigest,
 		HTML:       obj.HTML,
 		HTMLDigest: obj.HTMLDigest,
-		CreatedAt:  entity.ISOTime(obj.CreatedAt),
-		ModifiedAt: entity.ISOTime(obj.ModifiedAt),
+		CreatedAt:  entity.ISOTime(obj.CreatedAt.Time),
+		ModifiedAt: entity.ISOTime(obj.ModifiedAt.Time),
 	}
 }
 
@@ -550,12 +551,12 @@ func (s *Service) CreateTemplateFromFiles(ctx context.Context, params entity.Cre
 	})
 }
 
-// SendEmail sends an email using the specified template.
-func (s *Service) SendEmail(ctx context.Context, params entity.SendEmailParams) error {
+// SendEmailSync sends an email using the specified template.
+func (s *Service) SendEmailSync(ctx context.Context, params entity.SendEmailParams) (*entity.MailQueue, error) {
 	// retrieve the template from the store
 	t, err := s.store.GetTemplate(ctx, params.ProjectID, params.TemplateID)
 	if err != nil {
-		return errors.Wrapf(err, "[service] store.GetTemplate failed")
+		return nil, errors.Wrapf(err, "[service] store.GetTemplate failed")
 	}
 
 	// parse the template string using go text/template
@@ -563,35 +564,35 @@ func (s *Service) SendEmail(ctx context.Context, params entity.SendEmailParams) 
 	// and subject
 	textTmpl, err := txttemplate.New("layout").Parse(t.Txt)
 	if err != nil {
-		return errors.Wrapf(err, "[service] txt template.New.Parse failed")
+		return nil, errors.Wrapf(err, "[service] txt template.New.Parse failed")
 	}
 	var txt strings.Builder
 	if err := textTmpl.ExecuteTemplate(&txt, "layout", params.TemplateParams); err != nil {
-		return errors.Wrapf(err, "[service] txt tmpl.ExecuteTemplate failed")
+		return nil, errors.Wrapf(err, "[service] txt tmpl.ExecuteTemplate failed")
 	}
 
 	htmlTmpl, err := htmltemplate.New("layout").Parse(t.HTML)
 	if err != nil {
-		return errors.Wrapf(err, "[service] html template.New.Parse failed")
+		return nil, errors.Wrapf(err, "[service] html template.New.Parse failed")
 	}
 	var html strings.Builder
 	if err := htmlTmpl.ExecuteTemplate(&html, "layout", params.TemplateParams); err != nil {
-		return errors.Wrapf(err, "[service] html tmpl.ExecuteTemplate failed")
+		return nil, errors.Wrapf(err, "[service] html tmpl.ExecuteTemplate failed")
 	}
 
 	trObj, err := s.store.GetSMTPTransport(ctx, params.TransportID, params.ProjectID)
 	if err != nil {
-		return errors.Wrapf(err, "[service] store.GetSMTPTransport failed")
+		return nil, errors.Wrapf(err, "[service] store.GetSMTPTransport failed")
 	}
 
 	// decrypt the password
 	mgr, err := secrets.New(secrets.AESGCMWithRandomNonce, s.encryptionKey)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	pwPlaintext, err := mgr.HexDecodeDecrypt(trObj.EncryptedPassword[:24], trObj.EncryptedPassword[24:])
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	awsTransport := email.NewAWSSMTPTransport(email.AWSConfig{
@@ -604,10 +605,110 @@ func (s *Service) SendEmail(ctx context.Context, params entity.SendEmailParams) 
 		ReplyTo:  trObj.EmailReplyTo,
 	})
 
-	return awsTransport.SendEmail(email.EmailParams{
+	if err := awsTransport.SendEmail(email.EmailParams{
 		Subject: params.Subject,
 		Text:    txt.String(),
 		HTML:    html.String(),
 		To:      params.To,
+	}); err != nil {
+		return nil, errors.Wrapf(err, "[service] awsTransport.SendEmail failed")
+	}
+	return nil, nil // TODO
+}
+
+// SendEmailAsync sends an email using the specified template.
+func (s *Service) SendEmailAsync(ctx context.Context, params entity.SendEmailParams) (*entity.MailQueue, error) {
+	// generate a unique mail queue id with at least 128-bites of entropy
+	// 22 base 58 characters is enough to represent 128-bits of entropy
+	// since 58^22 > 2^128
+	const mailQueueIDLen = 22
+	mailQueueID, err := base58.RandString(mailQueueIDLen)
+	if err != nil {
+		return nil, errors.Wrapf(err, "[service] base58.RandString failed")
+	}
+
+	mq, err := s.store.InsertMailQueue(ctx, store.AddMailQueue{
+		MailQueueID:     mailQueueID,
+		ProjectID:       params.ProjectID,
+		Body:            params.Body,
+		SMTPTransportID: params.TransportID,
+		TemplateID:      params.TemplateID,
+		Subj:            params.Subject,
+		EmailTo:         store.JSONArray(params.To),
 	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "[service] store.InsertMailQueue failed")
+	}
+
+	fmt.Printf("MD\n")
+	fmt.Printf("%#v\n", mq.Metadata.Project)
+	fmt.Println("******************")
+
+	return mailQueueFromStoreObject(mq), nil
+}
+
+func mailQueueFromStoreObject(obj *store.MailQueue) *entity.MailQueue {
+	return &entity.MailQueue{
+		ID:         obj.MailQueueID,
+		ProjectID:  obj.ProjectID,
+		State:      obj.Mstate,
+		Subject:    obj.Subj,
+		To:         obj.EmailTo,
+		Body:       obj.Body,
+		Metadata:   mailQueueMetadataFromStoreObject(obj.Metadata),
+		CreatedAt:  entity.ISOTime(obj.CreatedAt.Time),
+		ModifiedAt: entity.ISOTime(obj.ModifiedAt.Time),
+	}
+}
+
+func mailQueueBodyFromStoreObject(obj store.MailQueueBody) *entity.MailQueueBody {
+	return &entity.MailQueueBody{
+		Text:           obj.Txt,
+		TextDigest:     obj.TxtDigest,
+		HTML:           obj.HTML,
+		HTMLDigest:     obj.HTMLDigest,
+		TemplateParams: obj.TemplateParams,
+	}
+}
+
+func mailQueueMetadataFromStoreObject(obj store.MailQueueMetadata) *entity.MailQueueMetadata {
+	return &entity.MailQueueMetadata{
+		Project: entity.MailQueueProject{
+			ID:        obj.Project.ProjectID,
+			Name:      obj.Project.ProjectName,
+			CreatedAt: entity.ISOTime(obj.Project.CreatedAt.Time),
+		},
+		// Group: entity.MailQueueGroup{
+		// 	ID:         obj.Group.GroupID,
+		// 	ProjectID:  obj.Group.ProjectID,
+		// 	Name:       obj.Group.GroupName,
+		// 	CreatedAt:  entity.ISOTime(obj.Group.CreatedAt.Time),
+		// 	ModifiedAt: entity.ISOTime(obj.Group.ModifiedAt.Time),
+		// },
+		// Template: entity.MailQueueTemplate{
+		// 	ID:         obj.Template.TemplateID,
+		// 	GroupID:    obj.Template.GroupID,
+		// 	ProjectID:  obj.Template.ProjectID,
+		// 	Text:       obj.Template.Txt,
+		// 	TextDigest: obj.Template.TxtDigest,
+		// 	HTML:       obj.Template.HTML,
+		// 	HTMLDigest: obj.Template.HTMLDigest,
+		// 	CreatedAt:  entity.ISOTime(obj.Template.CreatedAt.Time),
+		// 	ModifiedAt: entity.ISOTime(obj.Template.ModifiedAt.Time),
+		// },
+		// SMTPTransport: entity.MailQueueSMTPTransport{
+		// 	ID:            obj.SMTPTransport.SMTPTransportID,
+		// 	ProjectID:     obj.SMTPTransport.ProjectID,
+		// 	Name:          obj.SMTPTransport.TransportName,
+		// 	Host:          obj.SMTPTransport.Host,
+		// 	Port:          obj.SMTPTransport.Port,
+		// 	Username:      obj.SMTPTransport.Username,
+		// 	Password:      obj.SMTPTransport.EncryptedPassword, // TODO unencrypt
+		// 	EmailFrom:     obj.SMTPTransport.EmailFrom,
+		// 	EmailFromName: obj.SMTPTransport.EmailFromName,
+		// 	// EmailReplyTo:  obj.SMTPTransport.EmailReplyTo,
+		// 	// CreatedAt:     entity.ISOTime(obj.SMTPTransport.CreatedAt),
+		// 	// ModifiedAt:    entity.ISOTime(obj.SMTPTransport.ModifiedAt),
+		// },
+	}
 }

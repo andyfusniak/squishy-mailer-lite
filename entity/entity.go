@@ -171,8 +171,94 @@ type SetTemplateParams struct {
 type SendEmailParams struct {
 	TemplateID     string
 	ProjectID      string
+	Body           string
 	TransportID    string
 	To             []string
 	Subject        string
 	TemplateParams map[string]string
+}
+
+//
+// mail queue
+//
+
+// MailQueueStateQueued represents the state of an email in the mail queue when it is queued.
+const MailQueueStateQueued = "queued"
+
+// MailQueue represents an email in the mail queue.
+type MailQueue struct {
+	ID         string
+	ProjectID  string
+	State      string
+	Subject    string
+	To         []string
+	Body       string
+	Transport  *MailQueueSMTPTransport
+	Metadata   *MailQueueMetadata
+	Params     map[string]string
+	CreatedAt  ISOTime
+	ModifiedAt ISOTime
+}
+
+// MailQueueBody represents the body of an email in the mail queue.
+type MailQueueBody struct {
+	Text           string
+	TextDigest     string
+	HTML           string
+	HTMLDigest     string
+	TemplateParams map[string]string
+}
+
+// MailQueueMetadata represents the metadata of an email in the mail queue.
+type MailQueueMetadata struct {
+	Project       MailQueueProject
+	Group         MailQueueGroup
+	Template      MailQueueTemplate
+	SMTPTransport MailQueueSMTPTransport
+}
+
+// MailQueueProject represents the project of an email in the mail queue.
+type MailQueueProject struct {
+	ID         string
+	Name       string
+	CreatedAt  ISOTime
+	ModifiedAt ISOTime
+}
+
+// MailQueueTemplate represents the template of an email in the mail queue.
+type MailQueueGroup struct {
+	ID         string
+	ProjectID  string
+	Name       string
+	CreatedAt  ISOTime
+	ModifiedAt ISOTime
+}
+
+// MailQueueTemplate represents the template of an email in the mail queue.
+type MailQueueTemplate struct {
+	ID         string
+	GroupID    string
+	ProjectID  string
+	Text       string
+	TextDigest string
+	HTML       string
+	HTMLDigest string
+	CreatedAt  ISOTime
+	ModifiedAt ISOTime
+}
+
+// MailQueueSMTPTransport represents the transport of an email in the mail queue.
+type MailQueueSMTPTransport struct {
+	ID            string
+	ProjectID     string
+	Name          string
+	Host          string
+	Port          int
+	Username      string
+	Password      string
+	EmailFrom     string
+	EmailFromName string
+	EmailReplyTo  []string
+	CreatedAt     ISOTime
+	ModifiedAt    ISOTime
 }

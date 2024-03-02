@@ -117,7 +117,7 @@ returning
   project_id, project_name, description, created_at
 `
 	var r store.Project
-	now := store.Datetime(time.Now().UTC())
+	now := store.Datetime{Time: time.Now().UTC()}
 	if err := q.readwrite.QueryRowContext(ctx, query,
 		sql.Named("project_id", params.ProjectID),
 		sql.Named("project_name", params.ProjectName),
@@ -203,7 +203,7 @@ returning
   created_at, modified_at
 `
 	var r store.SMTPTransport
-	now := store.Datetime(time.Now().UTC())
+	now := store.Datetime{Time: time.Now().UTC()}
 	if err := q.readwrite.QueryRowContext(ctx, query,
 		sql.Named("smtp_transport_id", params.SMTPTransportID),
 		sql.Named("transport_name", params.TransportName),
@@ -310,7 +310,7 @@ returning
   group_id, project_id, group_name, created_at, modified_at
 	`
 	var r store.Group
-	now := store.Datetime(time.Now().UTC())
+	now := store.Datetime{Time: time.Now().UTC()}
 	if err := q.readwrite.QueryRowContext(ctx, query,
 		sql.Named("group_id", params.GroupID),
 		sql.Named("project_id", params.ProjectID),
@@ -404,7 +404,7 @@ returning
   template_id, group_id, project_id, txt, txt_digest, html, html_digest, created_at, modified_at
 `
 	var r store.Template
-	now := store.Datetime(time.Now().UTC())
+	now := store.Datetime{Time: time.Now().UTC()}
 	if err := q.readwrite.QueryRowContext(ctx, query,
 		sql.Named("template_id", params.TemplateID),
 		sql.Named("group_id", params.GroupID),
@@ -500,8 +500,8 @@ where
 				TxtDigest:  params.TxtDigest,
 				HTML:       params.HTML,
 				HTMLDigest: params.HTMLDigest,
-				CreatedAt:  store.Datetime(time.Now().UTC()),
-				ModifiedAt: store.Datetime(time.Now().UTC()),
+				CreatedAt:  store.Datetime{Time: time.Now().UTC()},
+				ModifiedAt: store.Datetime{Time: time.Now().UTC()},
 			})
 			if err != nil {
 				return err
@@ -571,7 +571,7 @@ returning
   template_id, group_id, project_id, txt, txt_digest, html, html_digest, created_at, modified_at
 `
 	var r store.Template
-	now := store.Datetime(time.Now().UTC())
+	now := store.Datetime{Time: time.Now().UTC()}
 	if err := q.readwrite.QueryRowContext(ctx, query,
 		sql.Named("txt", params.txt),
 		sql.Named("txt_digest", params.txtDigest),
@@ -641,6 +641,131 @@ where
 
 	if r.TemplateID == "" {
 		return nil, store.NewStoreError(store.ErrTemplateNotFound, nil)
+	}
+
+	return &r, nil
+}
+
+//
+// mail queue
+//
+
+// InsertMailQueue inserts a new mail queue item into the store. If the project
+// does not exist, an error of type store.ErrProjectNotFound is returned.
+func (q *Queries) InsertMailQueue(ctx context.Context, params store.AddMailQueue) (*store.MailQueue, error) {
+	fmt.Printf("%#v\n", params)
+	const query = `
+insert or abort into mailqueue (
+  mailqueue_id, project_id, mstate, subj, email_from, email_to,
+  body, transport, metadata, created_at, modified_at
+)
+select
+  :mailqueue_id as mailqueue_id,
+  p.project_id,
+  :mstate as mstate,
+  :subj as subj,
+  email_from_name || ' <' || s.email_from || '>' as email_from,
+  :email_to as email_to,
+  :body as body,
+  case when s.smtp_transport_id is not null then
+    json_object(
+      'smtp_transport_id', s.smtp_transport_id,
+      'project_id', s.project_id,
+      'transport_name', s.transport_name,
+      'host', s.host,
+      'port', s.port,
+      'username', s.username,
+      'encrypted_password', s.encrypted_password,
+      'email_from', s.email_from,
+      'email_from_name', s.email_from_name,
+      'email_replyto', json_extract(s.email_replyto, '$'),
+      'created_at', s.created_at,
+      'modified_at', s.modified_at
+    )
+  else
+    null end as transport,
+  case when t.template_id is not null then
+    json_object('project', json_object(
+      'project_id', p.project_id,
+      'project_name', p.project_name,
+      'description', p.description,
+      'created_at', p.created_at
+    ), 'group', json_object(
+        'group_id', g.group_id,
+        'project_id', g.project_id,
+        'group_name', g.group_name,
+        'created_at', g.created_at,
+        'modified_at', g.modified_at
+    ), 'template', json_object(
+      'template_id', t.template_id,
+      'group_id', t.group_id,
+      'project_id', t.project_id,
+      'txt', t.txt,
+      'txt_digest', t.txt_digest,
+      'html', t.html,
+      'html_digest', t.html_digest,
+      'created_at', t.created_at
+    ))
+  else
+    '' end as metadata,
+  :created_at as created_at,
+  :modified_at as modified_at
+from projects as p
+left outer join smtp_transports as s
+  on p.project_id = s.project_id and s.smtp_transport_id = :smtp_transport_id
+left outer join templates as t
+  on p.project_id = t.project_id and t.template_id = :template_id
+left outer join groups as g
+  on p.project_id = g.project_id and g.group_id = t.group_id
+where
+  p.project_id = :project_id
+returning
+  mailqueue_id, project_id, mstate, subj, email_to,
+  body, transport, metadata, created_at, modified_at
+`
+	var r store.MailQueue
+	now := store.Datetime{Time: time.Now().UTC()}
+	if err := q.readwrite.QueryRowContext(ctx, query,
+		sql.Named("mailqueue_id", params.MailQueueID),
+		sql.Named("mstate", store.MailStateQueued),
+		sql.Named("subj", params.Subj),
+		sql.Named("email_to", params.EmailTo),
+		sql.Named("body", params.Body),
+		sql.Named("created_at", &now),
+		sql.Named("modified_at", &now),
+		sql.Named("smtp_transport_id", params.SMTPTransportID),
+		sql.Named("template_id", params.TemplateID),
+		sql.Named("project_id", params.ProjectID),
+	).Scan(
+		&r.MailQueueID,
+		&r.ProjectID,
+		&r.Mstate,
+		&r.Subj,
+		&r.EmailTo,
+		&r.Body,
+		&r.Transport,
+		&r.Metadata,
+		&r.CreatedAt,
+		&r.ModifiedAt,
+	); err != nil {
+		// if there are no rows then the project does not exist
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, store.NewStoreError(store.ErrProjectNotFound, err)
+		}
+
+		// NOT NULL constraint failed: mailqueue.metadata
+		var sqlErr sqlite3.Error
+		if errors.As(err, &sqlErr) {
+			fmt.Printf("%#v\n", sqlErr)
+			if sqlErr.Code == sqlite3.ErrConstraint && sqlErr.ExtendedCode == sqlite3.ErrConstraintNotNull {
+				return nil, store.NewStoreError(store.ErrSMTPTransportNotFound, err)
+			} else if sqlErr.Code == sqlite3.ErrConstraint && sqlErr.ExtendedCode == sqlite3.ErrConstraintCheck {
+				return nil, store.NewStoreError(store.ErrTemplateNotFound, err)
+			}
+		}
+
+		return nil, errors.Wrapf(err,
+			"[sqlite3:mailqueue] query row scan failed query=%q", query)
 	}
 
 	return &r, nil
