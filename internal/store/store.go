@@ -344,9 +344,9 @@ func (b *MailQueueBody) Scan(v any) error {
 
 // MailQueueMetadata represents the metadata of an email in the mail queue.
 type MailQueueMetadata struct {
-	Project *MailQueueProject `json:"project"`
-	// Group         MailQueueGroup         `json:"group"`
-	// Template      MailQueueTemplate      `json:"template"`
+	Project  *MailQueueProject  `json:"project"`
+	Group    *MailQueueGroup    `json:"group"`
+	Template *MailQueueTemplate `json:"template"`
 	// SMTPTransport MailQueueSMTPTransport `json:"smtp_transport"`
 }
 
@@ -389,12 +389,14 @@ type MailQueueGroup struct {
 	ModifiedAt Datetime `json:"modified_at"`
 }
 
-func (g *MailQueueGroup) Scan(v any) error {
-	var obj MailQueueGroup
-	if err := json.Unmarshal([]byte(v.(string)), &v); err != nil {
+// UnmarshalJSON unmarshals a JSON object into a MailQueueGroup.
+func (g *MailQueueGroup) UnmarshalJSON(v []byte) error {
+	type Alias MailQueueGroup
+	var obj Alias
+	if err := json.Unmarshal(v, &obj); err != nil {
 		return err
 	}
-	*g = obj
+	*g = MailQueueGroup(obj)
 	return nil
 }
 
@@ -411,12 +413,13 @@ type MailQueueTemplate struct {
 	ModifiedAt Datetime `json:"modified_at"`
 }
 
-func (t *MailQueueTemplate) Scan(v any) error {
-	var obj MailQueueTemplate
-	if err := json.Unmarshal([]byte(v.(string)), &v); err != nil {
+func (t *MailQueueTemplate) UnmarshalJSON(v []byte) error {
+	type Alias MailQueueTemplate
+	var obj Alias
+	if err := json.Unmarshal(v, &obj); err != nil {
 		return err
 	}
-	*t = obj
+	*t = MailQueueTemplate(obj)
 	return nil
 }
 
